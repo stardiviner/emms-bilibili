@@ -1,0 +1,15 @@
+* emms-bilibili
+
+Bilibili playlist for EMMS
+
+
+* Usage
+
+Set your user mid like this:
+
+#+begin_src emacs-lisp
+(setq emms-bilibili-mid 2534878)
+#+end_src
+
+
+=[M-x emms-bilibili]=
