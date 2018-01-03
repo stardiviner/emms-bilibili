@@ -1,6 +1,7 @@
 ;;; emms-bilibili.el --- Play Bilibili in EMMS.
 
-;; Authors: Tristan <huangtc@outlook.com>, stardiviner <numbchild@gmail.com>
+;; Authors: Tristan <huangtc@outlook.com>
+;; Maintainers: stardiviner <numbchild@gmail.com>
 ;; Package-Requires: ((emacs "25") (cl-lib "0.5"))
 ;; Package-Version: 0.1
 ;; Keywords: emms bilibili
