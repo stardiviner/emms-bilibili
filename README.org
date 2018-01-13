@@ -3,6 +3,34 @@
 Bilibili playlist for EMMS
 
 
+* Installation
+
+** Requirements
+
+- [[https://mpv.io/][mpv]] :: Make sure you have "mpv" installed, because emms-bilibili require EMMS
+         player like ~emms-player-mpv~ to play.
+- [[https://github.com/rg3/youtube-dl][youtube-dl]] :: It is required by mpv when playing Bilibili tracks.
+
+** use-package
+
+#+begin_src emacs-lisp
+(use-package emms-bilibili
+    :ensure t
+    :commands (emms-bilibili))
+#+end_src
+
+* Configuration
+
+** suggest you to use emms-player-mpv
+
+#+begin_src emacs-lisp
+(use-package emms-player-mpv
+    :ensure t
+    :config
+    (add-to-list 'emms-player-list 'emms-player-mpv))
+#+end_src
+
+
 * Usage
 
 Set your user mid like this:
