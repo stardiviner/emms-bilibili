@@ -181,22 +181,7 @@
            (kill-buffer (format "*%s*" p)))
          track-url)))))
 
-;;; some tests
-;; get pagecount
-;; (alist-get 'pagecount (alist-get 'data bilibili-json)) ; FIXME: unknown bilibili-json
-;;
-;; get first video title
-;; (alist-get 'title (nth 0 emms-bilibili-alist))
-;;
-;; get video ID
-;; (alist-get 'aid (nth 0 emms-bilibili-alist))
-;;
-;; get video URL
-;; (emms-bilibili-generate-video-url (alist-get 'aid (nth 0 emms-bilibili-alist)))
-;;
-;; get video state
-;; (alist-get 'state (nth 10 emms-bilibili-alist))
-
+;;;###autoload
 (defun emms-bilibili ()
   "Start emms-bilibili.
 
