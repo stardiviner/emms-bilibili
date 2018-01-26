@@ -65,6 +65,12 @@
 ;; ssl magic
 ;; (setq tls-program '("openssl s_client -connect %h:%p -no_ssl2 -ign_eof"))
 
+(defun emms-bilibili-get-mid ()
+  "Prompt user for mid."
+  (unless (not (null emms-bilibili-mid))
+    (browse-url "https://space.bilibili.com/")
+    (setq emms-bilibili-mid (read-from-minibuffer "Input your Bilibili user mid number: "))))
+
 (defun emms-bilibili-url-clean-response-buffer ()
   "Delete header from response buffer."
   (goto-char (point-min))
@@ -191,6 +197,8 @@ main EMMS playlist buffer."
   (when (and emms-playlist-buffer-p
              (not (eq (current-buffer) emms-playlist-buffer)))
     (emms-playlist-set-playlist-buffer (current-buffer)))
+  (when (null emms-bilibili-mid)
+    (emms-bilibili-get-mid))
   (with-current-emms-playlist
     (emms-playlist-clear)
     (emms-bilibili-sync-playlist))
