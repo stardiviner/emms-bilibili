@@ -31,6 +31,7 @@
 (require 'emms)
 (require 'emms-browser)
 (require 'emms-source-playlist)
+(require 'emms-mark-mode)
 
 ;; init
 (defgroup emms-bilibili nil
@@ -41,6 +42,17 @@
 (defcustom emms-bilibili-mid nil
   "User mid."
   :type 'number
+  :group 'emms-bilibili)
+
+(defcustom emms-bilibili-downloader "youtube-dl"
+  "Specify `emms-bilibili' track downloader."
+  :type 'string
+  :group 'emms-bilibili)
+
+;;; TODO: path compatible with MacOS, Windows.
+(defcustom emms-bilibili-download-directory "~/Downloads"
+  "The default directory for `emms-bilibili' downloading videos."
+  :type 'string
   :group 'emms-bilibili)
 
 (defvar emms-bilibili-alist nil
@@ -114,6 +126,49 @@
 (add-hook 'emms-bilibili-response-received-hook
           (lambda () (message "emms-bilibili fetch playlist done.")))
 
+;;; Support marked tracks actions.
+(defun emms-bilibili-download-marked-tracks ()
+  "Download all tracks marked in the `emms-bilibili' playlist buffer."
+  (interactive)
+  (let ((tracks (emms-mark-mapcar-marked-track 'emms-bilibili-track-at t)))
+    (if (null tracks)
+        (message "No track marked!")
+      (mapc
+       (lambda (track) (emms-bilibili-download-track track))
+       tracks))))
+
+(defun emms-bilibili-track-at (&optional pos)
+  "Get the track at position `POS'."
+  (let ((track (emms-playlist-track-at pos))
+        newtrack)
+    (when track
+      (setq newtrack (copy-sequence track))
+      (emms-track-set newtrack 'position (point-marker))
+      (emms-track-set newtrack 'orig-track track)
+      newtrack)))
+
+(define-key emms-mark-mode-map "d" 'emms-bilibili-download-marked-tracks)
+
+(defun emms-bilibili-download-track (track)
+  "Download the track at point, or `TRACK'."
+  (interactive (list (emms-bilibili-track-at)))
+  (if (null track)
+      (message "No track at point!")
+    (let ((track-url (emms-bilibili-track-extract-url track))
+          (default-directory (expand-file-name emms-bilibili-download-directory)))
+      (if (null track-url)
+          (message "Track URL property does not exist!")
+        (message (format "emms-bilibili downloading %s ......" (emms-track-get track 'info-title)))
+        (async-start-process
+         (format "emms-bilibili download %s" (emms-track-get track 'info-title))
+         emms-bilibili-downloader
+         (lambda (p) ; p: return the process name.
+           (message (format "%s DONE." p)))
+         track-url)))))
+
+(defun emms-bilibili-track-extract-url (track)
+  "Extract URL from the `TRACK'."
+  (emms-track-get track 'info-url))
 
 ;;; some tests
 ;; get pagecount
