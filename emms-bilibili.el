@@ -28,6 +28,7 @@
 (require 'cl-lib)
 (require 'url)
 (require 'json)
+(require 'async)
 (require 'emms)
 (require 'emms-browser)
 (require 'emms-source-playlist)
@@ -50,7 +51,7 @@
   :group 'emms-bilibili)
 
 ;;; TODO: path compatible with MacOS, Windows.
-(defcustom emms-bilibili-download-directory "~/Downloads"
+(defcustom emms-bilibili-download-directory "~/Downloads/"
   "The default directory for `emms-bilibili' downloading videos."
   :type 'string
   :group 'emms-bilibili)
@@ -136,7 +137,7 @@
     (if (null tracks)
         (message "No track marked!")
       ;; `youtube-dl' command can accepts multiple URLs.
-      (emms-bilibili-download-tracks tracks))))
+      (mapc 'emms-bilibili-download-track tracks))))
 
 (defun emms-bilibili-track-at (&optional pos)
   "Get the track at position `POS'."
@@ -148,35 +149,37 @@
       (emms-track-set newtrack 'orig-track track)
       newtrack)))
 
-(defun emms-bilibili-download-tracks (tracks)
-  "Download the tracks at point, or `TRACKS'."
+(defun emms-bilibili-download-track (track)
+  "Download the tracks at point, or `TRACK'."
   (interactive (list (emms-bilibili-track-at)))
-  (if (null tracks)
+  (if (null track)
       (message "No tracks at point!")
-    (let ((tracks-url-list (emms-bilibili-extract-urls tracks))
-          (default-directory (expand-file-name emms-bilibili-download-directory)))
-      (if (null tracks-url-list)
-          (message "Track URL property does not exist!")
-        (message (format "emms-bilibili start downloading..."))
-        ;; FIXME:: youtube-dl does not track 'URL1 URL2' as two separate URLs.
-        ;; Need to separate into strings as separate arguments.
-        (mapc 'emms-bilibili-download-with-youtube-dl tracks-url-list)))))
+    (emms-bilibili-download-with-youtube-dl track)))
 
-(defun emms-bilibili-extract-urls (tracks)
-  "Extract URLs from `TRACKS'."
-  (mapcar (lambda (track) (emms-track-get track 'info-url)) tracks))
+(defun emms-bilibili-extract-url (track)
+  "Extract URLs from `TRACK'."
+  (emms-track-get track 'info-url))
 
-(defun emms-bilibili-download-with-youtube-dl (url)
-  "Download track `URL' with `youtube-dl'."
-  (async-start-process
-   "emms-bilibili download"
-   emms-bilibili-downloader
-   (lambda (p) ; p: return the process name.
-     ;; TODO: handle download error if has.
-     (message (format "%s DONE." p))
-     ;; kill process buffer if it is done.
-     (kill-buffer (format "*%s*" p)))
-   url))
+(defun emms-bilibili-download-with-youtube-dl (track)
+  "Download `TRACK' with `youtube-dl'."
+  (let ((track-url (emms-bilibili-extract-url track))
+        (default-directory (expand-file-name emms-bilibili-download-directory)))
+    (if (null track-url)
+        (message "Track URL property does not exist!")
+      (message (format "emms-bilibili start downloading..."))
+      ;; create directory for every vid to handle big FLV video split case.
+      ;; use title as directory name.
+      (mkdir (expand-file-name (emms-track-get track 'info-title)) t)
+      (let ((default-directory (expand-file-name (emms-track-get track 'info-title))))
+        (async-start-process
+         "emms-bilibili download"
+         emms-bilibili-downloader
+         (lambda (p)                         ; p: return the process name.
+           ;; TODO: handle download error if has.
+           (message (format "%s DONE." p))
+           ;; kill process buffer if it is done.
+           (kill-buffer (format "*%s*" p)))
+         track-url)))))
 
 ;;; some tests
 ;; get pagecount
