@@ -31,7 +31,7 @@
 (require 'emms)
 (require 'emms-browser)
 (require 'emms-source-playlist)
-(require 'emms-mark-mode)
+(require 'emms-mark)
 
 ;; init
 (defgroup emms-bilibili nil
@@ -199,7 +199,9 @@ main EMMS playlist buffer."
     (emms-playlist-clear)
     (emms-bilibili-sync-playlist))
   ;; auto open *EMMS Playlist* buffer.
-  (emms))
+  (emms)
+  (with-current-emms-playlist
+    (emms-mark-mode)))
 
 
 
