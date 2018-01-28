@@ -122,7 +122,7 @@
              (when (= current-page 1)
                (setq emms-bilibili-alist nil))
              (setq emms-bilibili-alist (append emms-bilibili-alist (alist-get 'archives data)))
-             (message "[%d/%d]" current-page pagecount)
+             (message "EMMS Bilibili bookmark page [%d/%d]" current-page pagecount)
              (if (= pagecount current-page)
                  (run-hooks 'emms-bilibili-response-received-hook)
                (emms-bilibili-sync-playlist (+ current-page 1))))))))))
@@ -131,7 +131,7 @@
 (add-hook 'emms-bilibili-response-received-hook
           (lambda () (mapcar 'emms-bilibili-insert-track emms-bilibili-alist)))
 (add-hook 'emms-bilibili-response-received-hook
-          (lambda () (message "emms-bilibili fetch playlist done.")))
+          (lambda () (message "EMMS Bilibili fetch playlist done.")))
 
 ;;; Support marked tracks actions.
 (define-key emms-mark-mode-map "d" 'emms-bilibili-download-marked-tracks)
@@ -172,7 +172,7 @@
         (default-directory (expand-file-name emms-bilibili-download-directory)))
     (if (null track-url)
         (message "Track URL property does not exist!")
-      (message (format "emms-bilibili start downloading..."))
+      (message (format "EMMS Bilibili start downloading..."))
       ;; create directory for every vid to handle big FLV video split case.
       ;; use title as directory name.
       (mkdir (expand-file-name (emms-track-get track 'info-title)) t)
