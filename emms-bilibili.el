@@ -185,6 +185,7 @@
            (message (format "%s DONE." p))
            ;; kill process buffer if it is done.
            (kill-buffer (format "*%s*" p)))
+         "--no-progress"
          track-url)))))
 
 ;;;###autoload
