@@ -204,9 +204,7 @@ main EMMS playlist buffer."
     (emms-playlist-clear)
     (emms-bilibili-sync-playlist))
   ;; auto open *EMMS Playlist* buffer.
-  (emms)
-  (with-current-emms-playlist
-    (emms-mark-mode)))
+  (emms))
 
 
 
