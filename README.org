@@ -5,6 +5,8 @@ Bilibili playlist for EMMS
 
 * Usage
 
+** workflow
+
 1) Add your directory to load path
 
    #+begin_src emacs-lisp
@@ -26,6 +28,12 @@ Bilibili playlist for EMMS
 4) run it
 
    =[M-x emms-bilibili]=
+
+** download marked trackes
+
+1. Enable ~emms-mark-mode~ at first in EMMS Playlist buffer.
+2. Then mark trackes with =[m]=.
+3. Then press =[d]= to download marked tracks.
 
 
 * Troubleshooting
