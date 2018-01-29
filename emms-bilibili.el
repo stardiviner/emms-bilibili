@@ -28,9 +28,11 @@
 (require 'cl-lib)
 (require 'url)
 (require 'json)
+(require 'async)
 (require 'emms)
 (require 'emms-browser)
 (require 'emms-source-playlist)
+(require 'emms-mark)
 
 ;; init
 (defgroup emms-bilibili nil
@@ -43,6 +45,17 @@
   :type 'number
   :group 'emms-bilibili)
 
+(defcustom emms-bilibili-downloader "youtube-dl"
+  "Specify `emms-bilibili' track downloader."
+  :type 'string
+  :group 'emms-bilibili)
+
+;;; TODO: path compatible with MacOS, Windows.
+(defcustom emms-bilibili-download-directory "~/Downloads/"
+  "The default directory for `emms-bilibili' downloading videos."
+  :type 'string
+  :group 'emms-bilibili)
+
 (defvar emms-bilibili-alist nil
   "Video info list.")
 
@@ -51,6 +64,12 @@
 
 ;; ssl magic
 ;; (setq tls-program '("openssl s_client -connect %h:%p -no_ssl2 -ign_eof"))
+
+(defun emms-bilibili-get-mid ()
+  "Prompt user for mid."
+  (unless (not (null emms-bilibili-mid))
+    (browse-url "https://space.bilibili.com/")
+    (setq emms-bilibili-mid (read-from-minibuffer "Input your Bilibili user mid number: "))))
 
 (defun emms-bilibili-url-clean-response-buffer ()
   "Delete header from response buffer."
@@ -103,7 +122,7 @@
              (when (= current-page 1)
                (setq emms-bilibili-alist nil))
              (setq emms-bilibili-alist (append emms-bilibili-alist (alist-get 'archives data)))
-             (message "[%d/%d]" current-page pagecount)
+             (message "EMMS Bilibili bookmark page [%d/%d]" current-page pagecount)
              (if (= pagecount current-page)
                  (run-hooks 'emms-bilibili-response-received-hook)
                (emms-bilibili-sync-playlist (+ current-page 1))))))))))
@@ -112,25 +131,64 @@
 (add-hook 'emms-bilibili-response-received-hook
           (lambda () (mapcar 'emms-bilibili-insert-track emms-bilibili-alist)))
 (add-hook 'emms-bilibili-response-received-hook
-          (lambda () (message "emms-bilibili fetch playlist done.")))
+          (lambda () (message "EMMS Bilibili fetch playlist done.")))
 
+;;; Support marked tracks actions.
+(define-key emms-mark-mode-map "d" 'emms-bilibili-download-marked-tracks)
 
-;;; some tests
-;; get pagecount
-;; (alist-get 'pagecount (alist-get 'data bilibili-json)) ; FIXME: unknown bilibili-json
-;;
-;; get first video title
-;; (alist-get 'title (nth 0 emms-bilibili-alist))
-;;
-;; get video ID
-;; (alist-get 'aid (nth 0 emms-bilibili-alist))
-;;
-;; get video URL
-;; (emms-bilibili-generate-video-url (alist-get 'aid (nth 0 emms-bilibili-alist)))
-;;
-;; get video state
-;; (alist-get 'state (nth 10 emms-bilibili-alist))
+(defun emms-bilibili-download-marked-tracks ()
+  "Download all tracks marked in the `emms-bilibili' playlist buffer."
+  (interactive)
+  (let ((tracks (emms-mark-mapcar-marked-track 'emms-bilibili-track-at t)))
+    (if (null tracks)
+        (message "No track marked!")
+      ;; `youtube-dl' command can accepts multiple URLs.
+      (mapc 'emms-bilibili-download-track tracks))))
 
+(defun emms-bilibili-track-at (&optional pos)
+  "Get the track at position `POS'."
+  (let ((track (emms-playlist-track-at pos))
+        newtrack)
+    (when track
+      (setq newtrack (copy-sequence track))
+      (emms-track-set newtrack 'position (point-marker))
+      (emms-track-set newtrack 'orig-track track)
+      newtrack)))
+
+(defun emms-bilibili-download-track (track)
+  "Download the tracks at point, or `TRACK'."
+  (interactive (list (emms-bilibili-track-at)))
+  (if (null track)
+      (message "No tracks at point!")
+    (emms-bilibili-download-with-youtube-dl track)))
+
+(defun emms-bilibili-extract-url (track)
+  "Extract URLs from `TRACK'."
+  (emms-track-get track 'info-url))
+
+(defun emms-bilibili-download-with-youtube-dl (track)
+  "Download `TRACK' with `youtube-dl'."
+  (let ((track-url (emms-bilibili-extract-url track))
+        (default-directory (expand-file-name emms-bilibili-download-directory)))
+    (if (null track-url)
+        (message "Track URL property does not exist!")
+      (message (format "EMMS Bilibili start downloading..."))
+      ;; create directory for every vid to handle big FLV video split case.
+      ;; use title as directory name.
+      (mkdir (expand-file-name (emms-track-get track 'info-title)) t)
+      (let ((default-directory (expand-file-name (emms-track-get track 'info-title))))
+        (async-start-process
+         "emms-bilibili download"
+         emms-bilibili-downloader
+         (lambda (p)                         ; p: return the process name.
+           ;; TODO: handle download error if has.
+           (message (format "%s DONE." p))
+           ;; kill process buffer if it is done.
+           (kill-buffer (format "*%s*" p)))
+         "--no-progress"
+         track-url)))))
+
+;;;###autoload
 (defun emms-bilibili ()
   "Start emms-bilibili.
 
@@ -140,6 +198,8 @@ main EMMS playlist buffer."
   (when (and emms-playlist-buffer-p
              (not (eq (current-buffer) emms-playlist-buffer)))
     (emms-playlist-set-playlist-buffer (current-buffer)))
+  (when (null emms-bilibili-mid)
+    (emms-bilibili-get-mid))
   (with-current-emms-playlist
     (emms-playlist-clear)
     (emms-bilibili-sync-playlist))
