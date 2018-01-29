@@ -33,6 +33,7 @@
 (require 'emms-browser)
 (require 'emms-source-playlist)
 (require 'emms-mark)
+(require 'magit-popup)
 
 ;; init
 (defgroup emms-bilibili nil
@@ -45,9 +46,14 @@
   :type 'number
   :group 'emms-bilibili)
 
-(defcustom emms-bilibili-downloader "youtube-dl"
+(defcustom emms-bilibili-downloader 'emms-bilibili-downloader-youtube-dl
   "Specify `emms-bilibili' track downloader."
-  :type 'string
+  :type '(choice
+          :tag "An option to set emms-bilibili downloader."
+          (const :tag "youtube-dl" emms-bilibili-downloader-youtube-dl)
+          (const :tag "aria2c" emms-bilibili-downloader-aria2c)
+          (const :tag "aria2c-rpc" emms-bilibili-downloader-aria2c-rpc)
+          (function :tag "user custom defined downloader function"))
   :group 'emms-bilibili)
 
 ;;; TODO: path compatible with MacOS, Windows.
@@ -134,16 +140,52 @@
           (lambda () (message "EMMS Bilibili fetch playlist done.")))
 
 ;;; Support marked tracks actions.
-(define-key emms-mark-mode-map "d" 'emms-bilibili-download-marked-tracks)
+;;;###autoload (autoload 'magithub-dispatch-popup "magithub" nil t)
+(magit-define-popup emms-bilibili-download-dispatch-popup
+  "Popup console for dispatching EMMS Bilibili download options."
+  'emms-bilibili-downloaders
+  :actions '("Downloaders"
+             (?y "youtube-dl" emms-bilibili-download-with-youtube-dl)
+             (?a "aria2c" emms-bilibili-download-with-aria2c)
+             (?A "aria2c-rpc" emms-bilibili-download-with-aria2c-rpc)))
 
-(defun emms-bilibili-download-marked-tracks ()
-  "Download all tracks marked in the `emms-bilibili' playlist buffer."
+;;;###autoload
+(eval-after-load "emms-bilibili"
+  '(progn
+     (define-key emms-mark-mode-map (kbd "d") #'emms-bilibili-download-dispatch-popup)
+     ))
+
+(defun emms-bilibili-download-dispatcher (downloader)
+  "EMMS Bilibili `DOWNLOADER' dispatcher."
+  (interactive)
+  (emms-bilibili-download-marked-tracks downloader))
+
+(defun emms-bilibili-download-with-youtube-dl ()
+  "Download tracks with youtube-dl."
+  (interactive)
+  (emms-bilibili-download-dispatcher 'emms-bilibili-downloader-youtube-dl))
+
+(defun emms-bilibili-download-with-aria2c ()
+  "Download tracks with aria2c."
+  (interactive)
+  (emms-bilibili-download-dispatcher 'emms-bilibili-downloader-aria2c))
+
+(defun emms-bilibili-download-with-aria2c-rpc ()
+  "Download tracks with aria2c-rpc."
+  (interactive)
+  (emms-bilibili-download-dispatcher 'emms-bilibili-downloader-aria2c-rpc))
+
+
+(defun emms-bilibili-download-marked-tracks (downloader)
+  "Download all marked tracks with `DOWNLOADER'."
   (interactive)
   (let ((tracks (emms-mark-mapcar-marked-track 'emms-bilibili-track-at t)))
+    (setq emms-bilibili-downloader downloader)
     (if (null tracks)
         (message "No track marked!")
-      ;; `youtube-dl' command can accepts multiple URLs.
-      (mapc 'emms-bilibili-download-track tracks))))
+      (mapc
+       (lambda (track) (emms-bilibili-download-track track emms-bilibili-downloader))
+       tracks))))
 
 (defun emms-bilibili-track-at (&optional pos)
   "Get the track at position `POS'."
@@ -155,18 +197,20 @@
       (emms-track-set newtrack 'orig-track track)
       newtrack)))
 
-(defun emms-bilibili-download-track (track)
-  "Download the tracks at point, or `TRACK'."
-  (interactive (list (emms-bilibili-track-at)))
+(defun emms-bilibili-download-track (track downloader)
+  "Download the tracks at point, or `TRACK' with `DOWNLOADER'."
+  ;; (interactive (list (emms-bilibili-track-at)))
   (if (null track)
       (message "No tracks at point!")
-    (emms-bilibili-download-with-youtube-dl track)))
+    ;; `downloader' passed in is a symbol.
+    (funcall downloader track)
+    ))
 
 (defun emms-bilibili-extract-url (track)
   "Extract URLs from `TRACK'."
   (emms-track-get track 'info-url))
 
-(defun emms-bilibili-download-with-youtube-dl (track)
+(defun emms-bilibili-downloader-youtube-dl (track)
   "Download `TRACK' with `youtube-dl'."
   (let ((track-url (emms-bilibili-extract-url track))
         (default-directory (expand-file-name emms-bilibili-download-directory)))
@@ -179,7 +223,7 @@
       (let ((default-directory (expand-file-name (emms-track-get track 'info-title))))
         (async-start-process
          "emms-bilibili download"
-         emms-bilibili-downloader
+         "youtube-dl"
          (lambda (p)                         ; p: return the process name.
            ;; TODO: handle download error if has.
            (message (format "%s DONE." p))
@@ -187,6 +231,15 @@
            (kill-buffer (format "*%s*" p)))
          "--no-progress"
          track-url)))))
+
+(defun emms-bilibili-downloader-aria2c ()
+  "Download `TRACK' with `aria2c'."
+  )
+
+(defun emms-bilibili-downloader-aria2c-rpc ()
+  "Download `TRACK' with `aria2c-rpc'."
+  )
+
 
 ;;;###autoload
 (defun emms-bilibili ()
