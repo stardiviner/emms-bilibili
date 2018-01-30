@@ -105,6 +105,7 @@
     (when (>= state 0)
       (emms-track-set track 'info-title title)
       (emms-track-set track 'info-artist artist)
+      (emms-track-set track 'info-url url)
       (emms-track-set track 'info-playing-time duration)
       (with-current-emms-playlist
         (emms-playlist-insert-track track)))))
