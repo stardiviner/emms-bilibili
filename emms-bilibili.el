@@ -105,7 +105,6 @@
     (when (>= state 0)
       (emms-track-set track 'info-title title)
       (emms-track-set track 'info-artist artist)
-      (emms-track-set track 'info-url url)
       (emms-track-set track 'info-playing-time duration)
       (with-current-emms-playlist
         (emms-playlist-insert-track track)))))
@@ -168,7 +167,7 @@
 (defun emms-bilibili-download-marked-tracks (downloader)
   "Download all marked tracks with `DOWNLOADER'."
   (interactive)
-  (let ((tracks (emms-mark-mapcar-marked-track 'emms-bilibili-track-at t)))
+  (let ((tracks (emms-mark-mapcar-marked-track 'emms-playlist-track-at t)))
     (setq emms-bilibili-downloader downloader)
     (if (null tracks)
         (message "No track marked!")
@@ -176,32 +175,17 @@
        (lambda (track) (emms-bilibili-download-track track emms-bilibili-downloader))
        tracks))))
 
-(defun emms-bilibili-track-at (&optional pos)
-  "Get the track at position `POS'."
-  (let ((track (emms-playlist-track-at pos))
-        newtrack)
-    (when track
-      (setq newtrack (copy-sequence track))
-      (emms-track-set newtrack 'position (point-marker))
-      (emms-track-set newtrack 'orig-track track)
-      newtrack)))
-
 (defun emms-bilibili-download-track (track downloader)
   "Download the tracks at point, or `TRACK' with `DOWNLOADER'."
-  ;; (interactive (list (emms-bilibili-track-at)))
+  (interactive (list (emms-playlist-track-at)))
   (if (null track)
       (message "No tracks at point!")
     ;; `downloader' passed in is a symbol.
-    (funcall downloader track)
-    ))
-
-(defun emms-bilibili-extract-url (track)
-  "Extract URLs from `TRACK'."
-  (emms-track-get track 'info-url))
+    (funcall downloader track)))
 
 (defun emms-bilibili-downloader-youtube-dl (track)
   "Download `TRACK' with `youtube-dl'."
-  (let ((track-url (emms-bilibili-extract-url track))
+  (let ((track-url (emms-track-name track))
         (default-directory (expand-file-name emms-bilibili-download-directory)))
     (if (null track-url)
         (message "Track URL property does not exist!")
