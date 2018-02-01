@@ -1,7 +1,7 @@
 ;;; emms-bilibili.el --- Play Bilibili in EMMS.
 
 ;; Authors: Tristan <huangtc@outlook.com>, stardiviner <numbchild@gmail.com>
-;; Package-Requires: ((emacs "25") (cl-lib "0.5") (async "1.9.2") (magit-popup "2.4.0"))
+;; Package-Requires: ((emacs "25") (cl-lib "0.5") (magit-popup "2.4.0"))
 ;; Package-Version: 0.1
 ;; Keywords: emms bilibili
 ;; homepage: https://github.com/stardiviner/emms-bilibili
@@ -28,7 +28,6 @@
 (require 'cl-lib)
 (require 'url)
 (require 'json)
-(require 'async)
 (require 'emms)
 (require 'emms-browser)
 (require 'emms-source-playlist)
@@ -194,16 +193,23 @@
       ;; use title as directory name.
       (mkdir (expand-file-name (emms-track-get track 'info-title)) t)
       (let ((default-directory (expand-file-name (emms-track-get track 'info-title))))
-        (async-start-process
-         "emms-bilibili download"
-         "youtube-dl"
-         (lambda (p)                         ; p: return the process name.
-           ;; TODO: handle download error if has.
-           (message (format "%s DONE." p))
-           ;; kill process buffer if it is done.
-           (kill-buffer (format "*%s*" p)))
-         "--no-progress"
-         track-url)))))
+        (make-process
+         :command (list "youtube-dl" "--no-progress" track-url)
+         :sentinel (lambda (proc event)
+                     (message (format "> proc: %s\n> event: %s" proc event))
+                     (if (string= event "finished\n")
+                         (progn
+                           (message "EMMS Bilibili download *DONE* !!!")
+                           (kill-buffer (process-buffer proc))
+                           ;; (kill-process proc)
+                           )
+                       (warn (format "%s *FAILED* XXX" proc))
+                       ))
+         :name (format "emms-bilibili download %s" track-url)
+         :buffer (format "*emms-bilibili download %s*" track-url)
+         ;; :stderr (format "*emms-bilibili download %s error*" track-url)
+         )
+        ))))
 
 (defun emms-bilibili-downloader-aria2c ()
   "Download `TRACK' with `aria2c'."
