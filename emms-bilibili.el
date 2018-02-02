@@ -45,6 +45,11 @@
   :type 'number
   :group 'emms-bilibili)
 
+(defcustom emms-bilibili-use-popup nil
+  "Whether use `magit-popup' like key interface by default."
+  :type 'boolean
+  :group 'emms-bilibili)
+
 (defcustom emms-bilibili-downloader 'emms-bilibili-downloader-youtube-dl
   "Specify `emms-bilibili' track downloader."
   :type '(choice
@@ -149,7 +154,16 @@
 ;;;###autoload
 (eval-after-load "emms-bilibili"
   '(progn
-     (define-key emms-mark-mode-map (kbd "d") #'emms-bilibili-download-dispatch-popup)
+     (if emms-bilibili-use-popup
+         (define-key emms-mark-mode-map (kbd "d") #'emms-bilibili-download-dispatch-popup)
+       (unless (boundp 'emms-bilibili-download-prefix)
+         (define-prefix-command 'emms-bilibili-download-prefix))
+       (add-hook 'emms-mark-mode
+                 (lambda ()
+                   (local-set-key (kbd "d") 'emms-bilibili-download-prefix)
+                   (define-key emms-bilibili-download-prefix (kbd "y") 'emms-bilibili-download-with-youtube-dl)
+                   ))
+       )
      ))
 
 (defun emms-bilibili-download-dispatcher (downloader)
