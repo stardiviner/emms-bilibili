@@ -2,7 +2,7 @@
 
 ;; Authors: Tristan <huangtc@outlook.com>
 ;; Maintainers: stardiviner <numbchild@gmail.com>
-;; Package-Requires: ((emacs "25") (cl-lib "0.5"))
+;; Package-Requires: ((emacs "25") (cl-lib "0.5") (emms "4.4") (emms-player-mpv "0.0.12"))
 ;; Package-Version: 0.1
 ;; Keywords: emms bilibili
 ;; homepage: https://github.com/stardiviner/emms-bilibili
