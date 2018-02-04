@@ -42,7 +42,7 @@ main EMMS playlist buffer."
              (not (eq (current-buffer) emms-playlist-buffer)))
     (emms-playlist-set-playlist-buffer (current-buffer)))
   (when (null emms-bilibili-mid)
-    (emms-bilibili-get-mid))
+    (emms-bilibili--get-mid))
   (with-current-emms-playlist
     (emms-playlist-clear)
     (emms-bilibili-sync-playlist entry))

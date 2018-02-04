@@ -18,33 +18,33 @@
   :type 'number
   :group 'emms-bilibili)
 
-(defun emms-bilibili-get-mid ()
+(defun emms-bilibili--get-mid ()
   "Prompt user for mid."
   (unless (not (null emms-bilibili-mid))
     (browse-url "https://space.bilibili.com/")
     (setq emms-bilibili-mid (read-from-minibuffer "Input your Bilibili user mid number: "))))
 
-(defun emms-bilibili-generate-video-url (aid)
+(defun emms-bilibili-generate--video-url (aid)
   "Generate video URL from `AID'."
   (format "https://www.bilibili.com/video/av%d/" aid))
 
-(defun emms-bilibili-generate-bangumi-url (bangumi)
+(defun emms-bilibili-generate--bangumi-url (bangumi)
   "Generate Bangumi URL from `BANGUMI'."
   (format "https://bangumi.bilibili.com/anime/%d/" bangumi))
 
-(defun emms-bilibili-url-clean-response-buffer ()
+(defun emms-bilibili-response-remove-headers ()
   "Delete header from response buffer."
   (goto-char (point-min))
   (re-search-forward "^$")
   (delete-region (point) (point-min))
   (delete-blank-lines))
 
-(defun emms-bilibili-response-json-parse (response)
+(defun emms-bilibili-response--json-parse (response)
   "Parse the `RESPONSE' to get JSON object data."
   (let ((response-buffer (current-buffer))
         (json-array-type 'list))
     (with-current-buffer response-buffer
-      (emms-bilibili-url-clean-response-buffer)
+      (emms-bilibili-response-remove-headers)
       (let* ((json-raw (json-read-from-string
                         (decode-coding-string (buffer-string) 'utf-8)))
              (pagecount (alist-get 'pagecount (alist-get 'data json-raw)))

@@ -21,7 +21,7 @@
   (let* ((title (alist-get 'title element))
          (artist (alist-get 'name (alist-get 'owner element)))
          (duration (alist-get 'duration element))
-         (url (emms-bilibili-generate-video-url (alist-get 'aid element)))
+         (url (emms-bilibili-generate--video-url (alist-get 'aid element)))
          (state (alist-get 'state element))
          (track (emms-track 'url url)))
     (when (>= state 0)
