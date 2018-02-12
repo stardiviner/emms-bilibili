@@ -7,6 +7,7 @@
 ;;; Code:
 
 (require 'magit-popup)
+(require 'request)
 
 (defcustom emms-bilibili-use-popup nil
   "Whether use `magit-popup' like key interface by default."
@@ -19,7 +20,7 @@
           :tag "An option to set emms-bilibili downloader."
           (const :tag "youtube-dl" emms-bilibili-downloader--youtube-dl)
           (const :tag "aria2c" emms-bilibili-downloader--aria2c)
-          (const :tag "aria2c-rpc" emms-bilibili-downloader--aria2c-rpc)
+          (const :tag "aria2-rpc" emms-bilibili-downloader--aria2-rpc)
           (function :tag "user custom defined downloader function"))
   :group 'emms-bilibili)
 
@@ -116,8 +117,26 @@
   "Download `TRACK' with `aria2c'."
   )
 
-(defun emms-bilibili-downloader--aria2c-rpc (track &rest args)
-  "Download `TRACK' with `aria2c-rpc'."
+(defun emms-bilibili-downloader--aria2-rpc (track &rest args)
+  "Download `TRACK' with `aria2-rpc'."
+  (let ((track-url (emms-track-name track))
+        (uri ()) ; TODO: extract out real download URI from youtube-dl.
+        )
+    (request
+     "http://localhost:6800/jsonrpc"
+     :type "POST"
+     :headers '(("Content-Type" . "application/json"))
+     :data (json-encode
+            '(("jsonrpc" . "2.0")
+              ("id" . "qwer")
+              ;; ("method" . "aria2.getGlobalStat")
+              ("method" . "aria2.addUri")
+              ("params" . [uri])
+              ))
+     :parser 'json-read
+     :success (function*
+               (lambda (&key data &allow-other-keys)
+                 (message (format "Get response: %s" data))))))
   )
 
 
