@@ -7,16 +7,18 @@
 ;;; Code:
 
 (require 'magit-popup)
+(require 'youtube-dl)
 
 (defcustom emms-bilibili-use-popup nil
   "Whether use `magit-popup' like key interface by default."
   :type 'boolean
   :group 'emms-bilibili)
 
-(defcustom emms-bilibili-downloader 'emms-bilibili-downloader--youtube-dl
+(defcustom emms-bilibili-downloader 'emms-bilibili-downloader--youtube-dl-el
   "Specify `emms-bilibili' track downloader."
   :type '(choice
           :tag "An option to set emms-bilibili downloader."
+          (const :tag "youtube-dl-el" emms-bilibili-downloader--youtube-dl-el)
           (const :tag "youtube-dl" emms-bilibili-downloader--youtube-dl)
           (const :tag "aria2c" emms-bilibili-downloader--aria2c)
           (const :tag "aria2c-rpc" emms-bilibili-downloader--aria2c-rpc)
@@ -40,6 +42,7 @@
        (add-hook 'emms-mark-mode
                  (lambda ()
                    (local-set-key (kbd "d") 'emms-bilibili-download-prefix)
+                   (define-key emms-bilibili-download-prefix (kbd "d") 'emms-bilibili-download--with-youtube-dl-el)
                    (define-key emms-bilibili-download-prefix (kbd "y") 'emms-bilibili-download--with-youtube-dl)
                    ))
        )
@@ -51,6 +54,7 @@
   "Popup console for dispatching EMMS Bilibili download options."
   'emms-bilibili-downloaders
   :actions '("Downloaders"
+             (?d "youtube-dl-el" emms-bilibili-download--with-youtube-dl-el)
              (?y "youtube-dl" emms-bilibili-download--with-youtube-dl)))
 
 
@@ -58,6 +62,11 @@
   "EMMS Bilibili `DOWNLOADER' dispatcher."
   (interactive)
   (emms-bilibili-download--marked-tracks downloader))
+
+(defun emms-bilibili-download--with-youtube-dl-el ()
+  "Download tracks with youtube-dl-el."
+  (interactive)
+  (emms-bilibili-download--dispatcher 'emms-bilibili-downloader--youtube-dl-el))
 
 (defun emms-bilibili-download--with-youtube-dl ()
   "Download tracks with youtube-dl."
@@ -82,6 +91,20 @@
       (message "No tracks at point!")
     ;; `downloader' passed in is a symbol.
     (funcall downloader track)))
+
+(defun emms-bilibili-downloader--youtube-dl-el (track)
+  "Download `TRACK' with `youtube-dl-el'."
+  (let ((track-url (emms-track-name track))
+        (default-directory (expand-file-name emms-bilibili-download-directory)))
+    (if (null track-url)
+        (message "Track URL property does not exist!")
+      (message (format "EMMS Bilibili start downloading..."))
+      ;; create directory for every vid to handle big FLV video split case.
+      ;; use title as directory name.
+      (mkdir (expand-file-name (emms-track-get track 'info-title)) t)
+      (let ((default-directory (expand-file-name (emms-track-get track 'info-title))))
+        (youtube-dl track-url
+                    :directory default-directory)))))
 
 (defun emms-bilibili-downloader--youtube-dl (track)
   "Download `TRACK' with `youtube-dl'."
