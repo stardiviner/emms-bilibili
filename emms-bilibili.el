@@ -26,7 +26,7 @@
 
 (require 'cl-lib)
 (require 'emms-mark)
-(require 'emms-bilibili-bookmark)
+(require 'emms-bilibili-favlist)
 (require 'emms-bilibili-download)
 
 
@@ -37,7 +37,7 @@
 If the current buffer is an EMMS playlist buffer, make it the
 main EMMS playlist buffer."
   (interactive (list (completing-read "Select Bilibili entry: "
-                                      '("bookmark" "user-space" "bangumi"))))
+                                      '("favlist" "bangumi"))))
   (when (and emms-playlist-buffer-p
              (not (eq (current-buffer) emms-playlist-buffer)))
     (emms-playlist-set-playlist-buffer (current-buffer)))

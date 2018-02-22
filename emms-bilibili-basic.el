@@ -36,15 +36,10 @@
 
 (defun emms-bilibili-sync-playlist (entry)
   "Dispatch Bilibili playlist to collect entries to the EMMS Playlist buffer.
-
 Prompt for a Bilibili entry like bookmark to sync playlist."
   (cl-case (intern entry)
-    ('bookmark
-     (emms-bilibili-bookmark-sync))
-    ('user-space
-     ;; TODO:
-     (message (format "%s currently is not supported by emms-bilibili yet.") entry)
-     )
+    ('favlist
+     (emms-bilibili-favlist-select))
     ('bangumi
      ;; TODO:
      (message (format "%s currently is not supported by emms-bilibili yet.") entry)
