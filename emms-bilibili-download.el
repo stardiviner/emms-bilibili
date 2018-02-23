@@ -60,22 +60,18 @@
 
 (defun emms-bilibili-download--dispatcher (downloader)
   "EMMS Bilibili `DOWNLOADER' dispatcher."
-  (interactive)
   (emms-bilibili-download--marked-tracks downloader))
 
 (defun emms-bilibili-download--with-youtube-dl-el ()
   "Download tracks with youtube-dl-el."
-  (interactive)
   (emms-bilibili-download--dispatcher 'emms-bilibili-downloader--youtube-dl-el))
 
 (defun emms-bilibili-download--with-youtube-dl ()
   "Download tracks with youtube-dl."
-  (interactive)
   (emms-bilibili-download--dispatcher 'emms-bilibili-downloader--youtube-dl))
 
 (defun emms-bilibili-download--marked-tracks (downloader)
   "Download all marked tracks with `DOWNLOADER'."
-  (interactive)
   (let ((tracks (emms-mark-mapcar-marked-track 'emms-playlist-track-at t)))
     (setq emms-bilibili-downloader downloader)
     (if (null tracks)
@@ -86,8 +82,7 @@
 
 (defun emms-bilibili-download--track (track downloader)
   "Download the tracks at point, or `TRACK' with `DOWNLOADER'."
-  (interactive (list (emms-playlist-track-at)))
-  (if (null track)
+  (if (null (emms-playlist-track-at))
       (message "No tracks at point!")
     ;; `downloader' passed in is a symbol.
     (funcall downloader track)))
