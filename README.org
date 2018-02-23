@@ -41,3 +41,2653 @@ Set your user mid like this:
 
 
 =[M-x emms-bilibili]=
+
+* Literate Programming
+
+** DONE The real source code url-retrieve
+CLOSED: [2018-02-23 Fri 22:50]
+:LOGBOOK:
+- State "DONE"       from              [2018-02-23 Fri 22:50]
+:END:
+
+#+begin_src emacs-lisp
+(defun emms-bilibili-bm-list-url-generate (vmid)
+  "Generate user `VMID' bookmarks list URL."
+  (format "https://api.bilibili.com/x/v2/fav/folder?vmid=%s&type=json" vmid))
+
+(defvar emms-bilibili-bm-list nil)
+
+(defun emms-bilibili-bm-list-construct (json-data)
+  "Extract fid, name, count from bookmarks list in `JSON-DATA'.
+The returned value is an alist like:
+  ((:name NAME) (:fid FID) (:count COUNT) (:bm-data ORIG_DATA)) ."
+  (mapcar
+   (lambda (bookmark)
+     (let ((fid (alist-get 'fid bookmark))
+           (name (alist-get 'name bookmark))
+           (count (alist-get 'cur_count bookmark))
+           bm-alist)
+       (push `(bm-data . ,bookmark) bm-alist)
+       (push `(count . ,count) bm-alist)
+       (push `(fid . ,fid) bm-alist)
+       (push `(name . ,name) bm-alist)
+       (push bm-alist emms-bilibili-bm-list)
+       ))
+   json-data))
+
+(defun emms-bilibili-bm-list-fetch ()
+  "Fetch all bookmarks list."
+  (url-retrieve
+   (emms-bilibili-bm-list-url-generate emms-bilibili-mid)
+   (lambda (status)
+     (let ((res (current-buffer))
+           (json-array-type 'list))
+       (with-current-buffer res
+         (emms-bilibili-url-clean-response-buffer) ; used to clean empty lines
+         (let* ((json-raw (json-read-from-string (decode-coding-string (buffer-string) 'utf-8)))
+                (data (alist-get 'data json-raw)))
+           (emms-bilibili-bm-list-construct data)  
+           ))))))
+
+(defun emms-bilibili-bm-select ()
+  "Select the bookmark you want.
+This will return the bookmark corresponding `fid' number."
+  (interactive (let* ((bookmarks )
+                      (bookmarks-title )
+                      (bookmarks-count ))
+                 (list bookmarks-title bookmarks-count)))
+  (string-to-number
+   (replace-regexp-in-string
+    ".*fid: "
+    ""
+    (completing-read
+     "EMMS Bilibili select bookmark: "
+     (mapcar
+      (lambda (bm) (format "%s => fid: %s" (alist-get 'name bm) (alist-get 'fid bm)))
+      emms-bilibili-bm-list))
+    )))
+#+end_src
+
+#+RESULTS[<2018-01-28 23:19:15> a34ffe7e4cf567a567294c157aff281575db0672]:
+: #<buffer  *http api.bilibili.com:443*-874641>
+
+** DONE play track
+CLOSED: [2018-02-11 Sun 22:33]
+:LOGBOOK:
+- State "DONE"       from              [2018-02-11 Sun 22:33]
+:END:
+
+*** DONE emms-bilibili https error [2/2]
+CLOSED: [2018-02-10 Sat 21:57]
+:LOGBOOK:
+- State "DONE"       from "BUG"        [2018-02-10 Sat 21:57]
+- State "BUG"        from              [2018-01-26 Fri 16:06]
+:END:
+
+#+begin_example
+gnutls.c: [1] (Emacs) connecting to host: api.bilibili.com
+gnutls.c: [1] (Emacs) allocating credentials
+gnutls.c: [2] (Emacs) allocating x509 credentials
+gnutls.c: [2] (Emacs) using default verification flags
+gnutls.c: [2] p11: No login requested.
+gnutls.c: [2] p11: No login requested.
+gnutls.c: [1] (Emacs) setting the trustfile:  /etc/ssl/certs/ca-certificates.crt
+gnutls.c: [1] (Emacs) setting the trustfile:  /etc/ssl/cert.pem
+gnutls.c: [1] (Emacs) gnutls callbacks
+gnutls.c: [1] (Emacs) gnutls_init
+gnutls.c: [1] (Emacs) got non-default priority string: NORMAL:%DUMBFW
+gnutls.c: [1] (Emacs) setting the priority string
+gnutls.c: [audit] Note that the security level of the Diffie-Hellman key exchange has been lowered to 256 bits and this may allow decryption of the session data
+gnutls.c: [2] HSK[0x160f0e10]: sent server name: 'api.bilibili.com'
+gnutls.c: [1] (Emacs) non-fatal error: Resource temporarily unavailable, try again.
+gnutls.c: [2] received curve SECP256R1
+gnutls.c: [1] (Emacs) non-fatal error: Resource temporarily unavailable, try again.
+gnutls.c: [2] (Emacs) Deallocating x509 credentials
+#+end_example
+
+Set to OpenSSL:
+
+#+begin_src emacs-lisp
+(setq starttls-use-gnutls t)
+(setq tls-program '("openssl s_client -connect %h:%p -no_ssl2 -ign_eof"))
+#+end_src
+
+#+begin_src emacs-lisp
+(emms-player-mpv-start (emms-playlist-track-at (point)))
+#+end_src
+
+- [X] https://github.com/dochang/emms-player-mpv/pull/11
+- [X] https://github.com/dochang/emms-player-mpv/issues/10
+
+** response parser [0/1]
+
+- [ ] ~emms-bilibili-response-remove-headers~ :: improve to use Emacs built-in
+     functions. to get the response JSON object data.
+
+** mark tracks actions [0/1]
+
+*** BUG [#A] emms-mark-mode startup error [1/1]
+:LOGBOOK:
+- Removed deadline, was "[2018-02-12 Mon]" on [2018-02-23 Fri 22:45]
+- State "BUG"        from              [2018-01-29 Mon 15:46]
+:END:
+
+#+begin_example
+Debugger entered--Lisp error: (error "No first track")
+  signal(error ("No first track"))
+  error("No first track")
+  emms-playlist-first()
+  emms-playlist-select-first()
+  emms-playlist-mode-startup()
+  emms-playlist-mode()
+  emms-playlist-mode-go()
+  emms()
+  emms-bilibili()
+#+end_example
+
+- [X] because emms-bilibili delay on playlist. so ~emms-mark-mode~ failed.
+
+#+begin_src emacs-lisp
+(setq emms-info-asynchronously nil)
+(setq emms-playlist-default-major-mode 'emms-mark-mode)
+#+end_src
+
+- [ ] try ~url-retrieve-synchronly~
+
+** download [5/7]
+
+*** DONE download with magit like popup interface -- ~emms-bilibili-download-track~
+CLOSED: [2018-02-23 Fri 22:51]
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2018-02-23 Fri 22:51]
+CLOCK: [2018-01-30 Tue 11:11]--[2018-02-03 Sat 10:07] => 94:56
+- State "STARTED"    from "TODO"       [2018-01-29 Mon 17:31]
+CLOCK: [2018-01-29 Mon 17:31]--[2018-01-29 Mon 19:07] =>  1:36
+- State "TODO"       from              [2018-01-29 Mon 15:40]
+:END:
+
+**** DONE [#A] async-start-process process buffer killed automatically issue [4/4]
+CLOSED: [2018-02-10 Sat 21:57] DEADLINE: <2018-01-29 Mon>
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2018-02-10 Sat 21:57]
+- State "STARTED"    from "BUG"        [2018-01-29 Mon 15:12]
+- State "BUG"        from "DONE"       [2018-01-29 Mon 15:01]
+- State "DONE"       from "STARTED"    [2018-01-29 Mon 14:57]
+- State "STARTED"    from "TODO"       [2018-01-29 Mon 14:51]
+CLOCK: [2018-01-29 Mon 14:51]--[2018-01-29 Mon 14:57] =>  0:06
+- State "TODO"       from              [2018-01-29 Mon 01:09]
+:END:
+
+- [X] test
+  - [X] one download
+  - [X] multiple downloads
+    - [X] async process sentinel can't delete process buffer with "<2>" suffix etc.
+
+*** DONE support download favourite list
+CLOSED: [2018-02-23 Fri 22:50]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2018-02-23 Fri 22:50]
+- State "TODO"       from "INPROGRESS" [2018-01-29 Mon 15:44]
+- State "INPROGRESS" from              [2018-01-28 Sun 22:53]
+:END:
+
+*** DONE download with youtube-dl
+CLOSED: [2018-01-29 Mon 15:40]
+:LOGBOOK:
+- State "DONE"       from              [2018-01-29 Mon 15:40]
+:END:
+
+*** TODO download with aria2c
+:LOGBOOK:
+- State "TODO"       from              [2018-01-29 Mon 15:40]
+:END:
+
+*** TODO download with aria2c-rpc
+:LOGBOOK:
+- State "TODO"       from              [2018-01-29 Mon 15:40]
+:END:
+
+*** DONE [#A] integrate youtube-dl-emacs into emms-bilibili [9/9]
+CLOSED: [2018-02-12 Mon 15:51] DEADLINE: <2018-02-10 Sat>
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2018-02-12 Mon 15:51] \\
+  basic support finished. Just some Bilibili URLs downloading seems always failed. Don't know why.
+CLOCK: [2018-02-12 Mon 14:48]--[2018-02-12 Mon 15:51] =>  1:03
+CLOCK: [2018-02-12 Mon 10:51]--[2018-02-12 Mon 14:45] =>  3:54
+- Not scheduled, was "[2018-02-08 Thu]" on [2018-02-10 Sat 21:58]
+CLOCK: [2018-02-08 Thu 23:42]--[2018-02-08 Thu 23:54] =>  0:12
+CLOCK: [2018-02-08 Thu 23:12]--[2018-02-08 Thu 23:37] =>  0:25
+CLOCK: [2018-02-08 Thu 22:42]--[2018-02-08 Thu 23:07] =>  0:25
+CLOCK: [2018-02-08 Thu 14:57]--[2018-02-08 Thu 14:58] =>  0:01
+CLOCK: [2018-02-08 Thu 13:52]--[2018-02-08 Thu 14:28] =>  0:36
+- State "STARTED"    from "CODE"       [2018-02-08 Thu 12:32]
+CLOCK: [2018-02-08 Thu 12:32]--[2018-02-08 Thu 13:17] =>  0:45
+- State "CODE"       from              [2018-02-08 Thu 12:32]
+:END:
+
+- [X] check out README
+- [X] check out source code
+- [X] possible to integrate into emms-bilibili?
+  - [X] yes
+- [X] modify code
+
+- [X] get video id with ~youtube-dl --get-id~.
+
+#+begin_src shell
+youtube-dl --get-id "https://www.bilibili.com/video/av19206955/"
+#+end_src
+
+#+RESULTS[<2018-02-08 13:24:20> 991d77d252f8e7eae7625eff4c4f556e0e66b632]:
+: 19206955
+
+#+begin_src emacs-lisp
+(prin1 (with-temp-buffer
+         (call-process
+          "youtube-dl"
+          nil t nil
+          "--get-id" "https://www.bilibili.com/video/av19206955/")
+         (buffer-string)))
+#+end_src
+
+#+RESULTS[<2018-02-08 13:51:11> a06650f24b799eccca4031ddf7472c545ee42da8]:
+: 19206955
+
+- [X] need to prefix id number with a prefix like "youtube-" or "bilibili-"
+
+#+begin_src emacs-lisp
+(let ((id (concat "bilibili-" id-number)))
+  )
+#+end_src
+
+- [X] get filename with ~--get-filename~
+
+#+begin_src shell
+youtube-dl --get-filename "https://www.bilibili.com/video/av19206955/"
+#+end_src
+
+#+RESULTS[<2018-02-08 13:52:54> 2dd90f247e039802b0f5780178038bde0d6884e1]:
+: 【番声】大胸妹怎么了？大胸妹吃你家大米了？-19206955.mp4
+
+- [X] get title with ~youtube-dl --get-title~.
+
+#+begin_src shell
+youtube-dl --get-title "https://www.bilibili.com/video/av19206955/"
+#+end_src
+
+#+RESULTS[<2018-02-08 13:23:46> a4b9d5198525c38bf9d3775d4e9ea891b7f98e29]:
+: 【番声】大胸妹怎么了？大胸妹吃你家大米了？
+
+** DONE emms user bookmarks list support [6/6]
+CLOSED: [2018-02-23 Fri 22:37] SCHEDULED: <2018-02-12 Mon>
+:LOGBOOK:
+- State "DONE"       from "STARTED"    [2018-02-23 Fri 22:37]
+CLOCK: [2018-02-23 Fri 22:24]--[2018-02-23 Fri 22:37] =>  0:13
+CLOCK: [2018-02-23 Fri 09:51]--[2018-02-23 Fri 10:41] =>  0:50
+CLOCK: [2018-02-22 Thu 19:11]--[2018-02-22 Thu 21:05] =>  1:54
+CLOCK: [2018-02-22 Thu 18:23]--[2018-02-22 Thu 18:24] =>  0:01
+- State "STARTED"    from "NEXT"       [2018-02-22 Thu 15:19]
+CLOCK: [2018-02-22 Thu 15:19]--[2018-02-22 Thu 18:16] =>  2:57
+- State "NEXT"       from "TODO"       [2018-02-11 Sun 22:33]
+- State "TODO"       from              [2018-01-29 Mon 15:41]
+:END:
+
+*** DONE curl get return JSON
+CLOSED: [2018-01-29 Mon 01:08]
+:LOGBOOK:
+- State "DONE"       from              [2018-01-29 Mon 01:08]
+:END:
+
+#+begin_src shell :results code :wrap src json
+curl -X GET "https://api.bilibili.com/x/v2/fav/folder?vmid=5311795&type=json" | json_pp
+#+end_src
+
+#+RESULTS[<2018-01-28 22:54:10> 3fb94438df88e281fc662fa638bb9352d34dc73e]:
+#+begin_src json
+{
+   "code" : 0,
+   "data" : [
+      {
+         "ctime" : 1438922096,
+         "atten_count" : 0,
+         "name" : "默认收藏夹",
+         "mtime" : 1513872588,
+         "state" : 0,
+         "max_count" : 100000,
+         "favoured" : 0,
+         "cover" : [
+            {
+               "aid" : 17110358,
+               "pic" : "http://i2.hdslb.com/bfs/archive/e9a9076242c1fafc60f394a63d4edbf09b3f489a.jpg"
+            },
+            {
+               "aid" : 16957235,
+               "pic" : "http://i2.hdslb.com/bfs/archive/3d81d431d29e21da844d6a19b363a66c15cf85b9.jpg"
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/648c302003d40a4a4a3c6b5337da7e6075873931.jpg",
+               "aid" : 15616081
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 187,
+         "fid" : 6076112
+      },
+      {
+         "cover" : [
+            {
+               "aid" : 16810564,
+               "pic" : "http://i0.hdslb.com/bfs/archive/13a6581cb3e3eea60d5bcbeb63f23211d8b29674.jpg"
+            },
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/39ccbfe789367d7f50423c494b306d94151be477.jpg",
+               "aid" : 6252268
+            },
+            {
+               "aid" : 15319048,
+               "pic" : "http://i1.hdslb.com/bfs/archive/186fc62c0adaddeaf88464f2255762feec34b416.jpg"
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 29,
+         "fid" : 98950759,
+         "name" : "装修",
+         "mtime" : 1516213176,
+         "state" : 2,
+         "max_count" : 999,
+         "favoured" : 0,
+         "atten_count" : 0,
+         "ctime" : 1516209077
+      },
+      {
+         "name" : "厨房",
+         "favoured" : 0,
+         "max_count" : 999,
+         "mtime" : 1515033326,
+         "state" : 2,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 17185784,
+               "pic" : "http://i1.hdslb.com/bfs/archive/fecc2fdffdd055c84b525e65b4acf268e8bbfdeb.jpg"
+            },
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/78058d49479429f191f92c47cf08fb0cf155d0eb.png",
+               "aid" : 11469310
+            }
+         ],
+         "fid" : 96641749,
+         "cur_count" : 2,
+         "ctime" : 1514894217,
+         "atten_count" : 0
+      },
+      {
+         "atten_count" : 0,
+         "ctime" : 1514373265,
+         "cur_count" : 2,
+         "fid" : 95604141,
+         "cover" : [
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/917122f5344bab47f7fdbdd17a74c4e881b6e96e.png",
+               "aid" : 16902249
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/7e66e62dd3479b59624caa45f41dd92d2e3fcc92.jpg",
+               "aid" : 10364305
+            }
+         ],
+         "mid" : 5311795,
+         "mtime" : 1514373356,
+         "state" : 2,
+         "favoured" : 0,
+         "max_count" : 999,
+         "name" : "ASMR"
+      },
+      {
+         "max_count" : 999,
+         "favoured" : 0,
+         "state" : 2,
+         "mtime" : 1513873712,
+         "name" : "学习",
+         "fid" : 94816981,
+         "cur_count" : 2,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/1a596c237a302a756b042885192ee4af8570d99b.jpg",
+               "aid" : 17165131
+            },
+            {
+               "aid" : 17235714,
+               "pic" : "http://i1.hdslb.com/bfs/archive/b2e0c3293a914636ced4dc48ead253cb3f266c61.jpg"
+            }
+         ],
+         "ctime" : 1513873180,
+         "atten_count" : 0
+      },
+      {
+         "fid" : 94696493,
+         "cur_count" : 1,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/d7f055e703b3331461ed22a1bf1e0c1d431e1a92.jpg",
+               "aid" : 16939552
+            }
+         ],
+         "favoured" : 0,
+         "max_count" : 999,
+         "state" : 2,
+         "mtime" : 1513787156,
+         "name" : "武器",
+         "atten_count" : 0,
+         "ctime" : 1513787155
+      },
+      {
+         "fid" : 94695775,
+         "cur_count" : 2,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/d7f055e703b3331461ed22a1bf1e0c1d431e1a92.jpg",
+               "aid" : 16939552
+            },
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/8d02c4ce74e5687a670bbd44807c607e0bdb9e77.jpg",
+               "aid" : 17342801
+            }
+         ],
+         "favoured" : 0,
+         "max_count" : 999,
+         "mtime" : 1513787156,
+         "state" : 2,
+         "name" : "机械",
+         "atten_count" : 0,
+         "ctime" : 1513786803
+      },
+      {
+         "name" : "互联网",
+         "state" : 2,
+         "mtime" : 1512009523,
+         "favoured" : 0,
+         "max_count" : 999,
+         "cover" : [
+            {
+               "aid" : 16777246,
+               "pic" : "http://i2.hdslb.com/bfs/archive/21cf803d6b5b5dec5fe1b8f93b628da405247ba9.jpg"
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 1,
+         "fid" : 91710732,
+         "ctime" : 1512009517,
+         "atten_count" : 0
+      },
+      {
+         "atten_count" : 0,
+         "ctime" : 1511698949,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/0cb096b790591f48ee22b03526c742b071de1c7a.jpg",
+               "aid" : 16566172
+            }
+         ],
+         "fid" : 91289551,
+         "cur_count" : 1,
+         "name" : "爱情",
+         "favoured" : 0,
+         "max_count" : 999,
+         "state" : 2,
+         "mtime" : 1511698955
+      },
+      {
+         "ctime" : 1511695453,
+         "atten_count" : 0,
+         "name" : "武术",
+         "state" : 2,
+         "mtime" : 1515335131,
+         "max_count" : 999,
+         "favoured" : 0,
+         "cover" : [
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/3a8b5c3b3b2ffb583f7f4b8e29dde220c3a48721.jpg",
+               "aid" : 17922949
+            },
+            {
+               "aid" : 11952077,
+               "pic" : "http://i0.hdslb.com/bfs/archive/9a6cdd406bc7449f59dfb41828bcb5e8a6beb6ef.jpg"
+            },
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/cfd60bc7575adfd138ffa46fb1645fc968851605.jpg",
+               "aid" : 16045879
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 4,
+         "fid" : 91280974
+      },
+      {
+         "atten_count" : 0,
+         "ctime" : 1511429769,
+         "cover" : [
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/002312303618437cc8ef6c3b59b021f0fb8c3c68.jpg",
+               "aid" : 18509510
+            },
+            {
+               "aid" : 18199099,
+               "pic" : "http://i1.hdslb.com/bfs/archive/d5d0e7651d223848908150c115f185196bab1355.png"
+            },
+            {
+               "aid" : 17575583,
+               "pic" : "http://i1.hdslb.com/bfs/archive/03e53cad878e8f359b8abfb20146c72381114eeb.jpg"
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 8,
+         "fid" : 90795112,
+         "name" : "野外",
+         "mtime" : 1516619911,
+         "state" : 2,
+         "max_count" : 999,
+         "favoured" : 0
+      },
+      {
+         "cur_count" : 5,
+         "fid" : 90467182,
+         "cover" : [
+            {
+               "aid" : 15805929,
+               "pic" : "http://i2.hdslb.com/bfs/archive/e2c89158db406b5c3f52371f40d959064ce94064.jpg"
+            },
+            {
+               "aid" : 15470086,
+               "pic" : "http://i1.hdslb.com/bfs/archive/89ebe38880ed2a858cfedbbe5509fcba5988c306.jpg"
+            },
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/277151e6ade4ea62566a8c30481de9a8523f07f4.jpg",
+               "aid" : 15713791
+            }
+         ],
+         "mid" : 5311795,
+         "state" : 2,
+         "mtime" : 1511431402,
+         "favoured" : 0,
+         "max_count" : 999,
+         "name" : "妹子",
+         "atten_count" : 0,
+         "ctime" : 1511177456
+      },
+      {
+         "favoured" : 0,
+         "max_count" : 999,
+         "mtime" : 1510144129,
+         "state" : 2,
+         "name" : "美容",
+         "fid" : 88757295,
+         "cur_count" : 1,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 15499475,
+               "pic" : "http://i0.hdslb.com/bfs/archive/7c3fef6a14d1046b214c6821c5e3753dec205d7a.jpg"
+            }
+         ],
+         "ctime" : 1510144127,
+         "atten_count" : 0
+      },
+      {
+         "ctime" : 1510143233,
+         "atten_count" : 0,
+         "name" : "DIY",
+         "max_count" : 999,
+         "favoured" : 0,
+         "mtime" : 1514651669,
+         "state" : 2,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 16630903,
+               "pic" : "http://i1.hdslb.com/bfs/archive/43626bf431c412c41a9ae2200722bbeb39caa5c2.jpg"
+            },
+            {
+               "aid" : 17677445,
+               "pic" : "http://i1.hdslb.com/bfs/archive/3830f2ab8fb813b3f87778ce1d2125765442e641.jpg"
+            },
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/bd774853c1c9864b02936b9aaf4681c415de88f8.jpg",
+               "aid" : 15367822
+            }
+         ],
+         "fid" : 88755131,
+         "cur_count" : 14
+      },
+      {
+         "name" : "科技",
+         "mtime" : 1516428760,
+         "state" : 2,
+         "favoured" : 0,
+         "max_count" : 999,
+         "cover" : [
+            {
+               "aid" : 18160524,
+               "pic" : "http://i2.hdslb.com/bfs/archive/435b2f3e3b33ced59009b281c1b3979b74d71539.jpg"
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/8df2de16b13d95eff9ba06a35a83d29ba6bc88e4.jpg",
+               "aid" : 17467692
+            },
+            {
+               "aid" : 15880058,
+               "pic" : "http://i1.hdslb.com/bfs/archive/3c5a8296d09b0ec81bd6bf5f933eec33fd7b99d0.jpg"
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 4,
+         "fid" : 88377356,
+         "ctime" : 1509883172,
+         "atten_count" : 0
+      },
+      {
+         "name" : "动画",
+         "favoured" : 0,
+         "max_count" : 999,
+         "mtime" : 1506482857,
+         "state" : 2,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/c533ca1c460559e4c9c8eb49002a3e954654a1fa.jpg",
+               "aid" : 14480624
+            }
+         ],
+         "fid" : 83719107,
+         "cur_count" : 1,
+         "ctime" : 1506482854,
+         "atten_count" : 0
+      },
+      {
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 14835233,
+               "pic" : "http://i2.hdslb.com/bfs/archive/f21c1ef4ae5b372ada394934e05fb100d35986db.jpg"
+            },
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/01f581478a0137fd4e546896711be0967ec0c855.jpg",
+               "aid" : 14696947
+            }
+         ],
+         "fid" : 83709130,
+         "cur_count" : 2,
+         "name" : "水果",
+         "favoured" : 0,
+         "max_count" : 999,
+         "mtime" : 1506590604,
+         "state" : 2,
+         "atten_count" : 0,
+         "ctime" : 1506469908
+      },
+      {
+         "ctime" : 1506469848,
+         "atten_count" : 0,
+         "max_count" : 999,
+         "favoured" : 0,
+         "state" : 2,
+         "mtime" : 1517064003,
+         "name" : "美食",
+         "fid" : 83709094,
+         "cur_count" : 212,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/d0d7d0cafacc85562840d25bb46b7edced566853.jpg",
+               "aid" : 18660908
+            },
+            {
+               "aid" : 18430748,
+               "pic" : "http://i1.hdslb.com/bfs/archive/9b0d95a77329d829d43c26bc416c68191dacbfdb.png"
+            },
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/b31887d70d2328706e5fb4cdc1b81aa22977011e.jpg",
+               "aid" : 18268287
+            }
+         ]
+      },
+      {
+         "ctime" : 1504939675,
+         "atten_count" : 0,
+         "name" : "农业",
+         "state" : 2,
+         "mtime" : 1513786445,
+         "favoured" : 0,
+         "max_count" : 999,
+         "cover" : [
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/59b702e915e20b90da375c3edc8558d8f5b01cd5.jpg",
+               "aid" : 11727813
+            },
+            {
+               "aid" : 17203580,
+               "pic" : "http://i0.hdslb.com/bfs/archive/1999b331143867bf5ca7d2e72d13d2c0f7f02ff7.jpg"
+            },
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/ecdb727fe24942fa6aa94ed2d6dea22c5b31d2e0.jpg",
+               "aid" : 15244658
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 5,
+         "fid" : 81465941
+      },
+      {
+         "favoured" : 0,
+         "max_count" : 999,
+         "state" : 2,
+         "mtime" : 1504633717,
+         "name" : "App",
+         "fid" : 81112064,
+         "cur_count" : 1,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 14195790,
+               "pic" : "http://i1.hdslb.com/bfs/archive/c00b8a61e5c7333db9149426cb5274b5eb344fc6.jpg"
+            }
+         ],
+         "ctime" : 1504633715,
+         "atten_count" : 0
+      },
+      {
+         "favoured" : 0,
+         "max_count" : 999,
+         "mtime" : 1510150199,
+         "state" : 2,
+         "name" : "医疗",
+         "fid" : 80554490,
+         "cur_count" : 5,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 9664260,
+               "pic" : "http://i0.hdslb.com/bfs/archive/ffa666b107e0bb872b3e04e83175b53dfa272d3d.jpg"
+            },
+            {
+               "aid" : 11911989,
+               "pic" : "http://i1.hdslb.com/bfs/archive/b1311822c47a7b027b7444a4264d6591252e95c2.png"
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/b92f3ed45663971b3fa3cc429e6fb14078de4484.jpg",
+               "aid" : 14768566
+            }
+         ],
+         "ctime" : 1504246271,
+         "atten_count" : 0
+      },
+      {
+         "name" : "梦想",
+         "mtime" : 1504140357,
+         "state" : 2,
+         "max_count" : 999,
+         "favoured" : 0,
+         "cover" : [
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/448fbd90c4415563831ccb4b5ac1b8503d00e63b.jpg",
+               "aid" : 13128484
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 1,
+         "fid" : 80408115,
+         "ctime" : 1504140355,
+         "atten_count" : 0
+      },
+      {
+         "ctime" : 1504139532,
+         "atten_count" : 0,
+         "state" : 2,
+         "mtime" : 1504139533,
+         "favoured" : 0,
+         "max_count" : 999,
+         "name" : "九州",
+         "cur_count" : 1,
+         "fid" : 80407353,
+         "cover" : [
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/395479fd50b0827ed6bf6ebd8cfced99adac18ec.jpg",
+               "aid" : 13969864
+            }
+         ],
+         "mid" : 5311795
+      },
+      {
+         "fid" : 79349712,
+         "cur_count" : 1,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 13482815,
+               "pic" : "http://i0.hdslb.com/bfs/archive/95f0d4bc9ab19e2a75e143edb85e51dda839cc20.jpg"
+            }
+         ],
+         "favoured" : 0,
+         "max_count" : 999,
+         "state" : 2,
+         "mtime" : 1503572361,
+         "name" : "武侠",
+         "atten_count" : 0,
+         "ctime" : 1503572359
+      },
+      {
+         "ctime" : 1503481724,
+         "atten_count" : 0,
+         "name" : "电影",
+         "favoured" : 0,
+         "max_count" : 999,
+         "state" : 2,
+         "mtime" : 1517029292,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 18679577,
+               "pic" : "http://i0.hdslb.com/bfs/archive/235111ac43ceb48fe870c226e23fc315b3dbd2f9.jpg"
+            },
+            {
+               "aid" : 17922203,
+               "pic" : "http://i2.hdslb.com/bfs/archive/44c315fd4eadf7391ff3adf2719981e69e330218.jpg"
+            },
+            {
+               "pic" : "http://i1.hdslb.com/bfs/archive/a8ddcfd33874bc3330cce625318391f649952ca9.jpg",
+               "aid" : 18010736
+            }
+         ],
+         "fid" : 79174776,
+         "cur_count" : 9
+      },
+      {
+         "max_count" : 999,
+         "favoured" : 0,
+         "mtime" : 1503478812,
+         "state" : 2,
+         "name" : "古风乐曲",
+         "fid" : 79166925,
+         "cur_count" : 1,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/d7602a40ae530381f516235b270e6a7f59e5d3ee.jpg",
+               "aid" : 13506043
+            }
+         ],
+         "ctime" : 1503478809,
+         "atten_count" : 0
+      },
+      {
+         "ctime" : 1502966655,
+         "atten_count" : 0,
+         "name" : "古风美女",
+         "max_count" : 999,
+         "favoured" : 0,
+         "mtime" : 1509146860,
+         "state" : 2,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 13499850,
+               "pic" : "http://i1.hdslb.com/bfs/archive/03567a9563546b2e92c74d3c08d355c4f7ec411b.jpg"
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/9de4d2a8759161d7a0259ee4f1c1bb2b469573e5.jpg",
+               "aid" : 15609471
+            },
+            {
+               "aid" : 13707474,
+               "pic" : "http://i0.hdslb.com/bfs/archive/8f2b97ae94d5ecbbb8002adfdd96aa9ed65ea736.jpg"
+            }
+         ],
+         "fid" : 78179778,
+         "cur_count" : 5
+      },
+      {
+         "mtime" : 1502930303,
+         "state" : 2,
+         "favoured" : 0,
+         "max_count" : 999,
+         "name" : "舞蹈",
+         "cur_count" : 1,
+         "fid" : 78098427,
+         "cover" : [
+            {
+               "aid" : 13365089,
+               "pic" : "http://i0.hdslb.com/bfs/archive/4624ffe9561fbea8127423291330e0957c86bd2b.jpg"
+            }
+         ],
+         "mid" : 5311795,
+         "ctime" : 1502930302,
+         "atten_count" : 0
+      },
+      {
+         "atten_count" : 0,
+         "ctime" : 1501919722,
+         "fid" : 75781637,
+         "cur_count" : 1,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/4b94a9f9e8c98d28c677a0de658c3f6c218357e0.png",
+               "aid" : 12952728
+            }
+         ],
+         "favoured" : 0,
+         "max_count" : 999,
+         "mtime" : 1501919725,
+         "state" : 2,
+         "name" : "国家政府政策"
+      },
+      {
+         "ctime" : 1497154964,
+         "atten_count" : 0,
+         "state" : 2,
+         "mtime" : 1516262965,
+         "favoured" : 0,
+         "max_count" : 999,
+         "name" : "歌曲",
+         "cur_count" : 4,
+         "fid" : 66683570,
+         "cover" : [
+            {
+               "aid" : 18229410,
+               "pic" : "http://i0.hdslb.com/bfs/archive/0a23b4c9a9ea9b070b2147fba58b7ea5401b5124.png"
+            },
+            {
+               "aid" : 17387818,
+               "pic" : "http://i1.hdslb.com/bfs/archive/b0a3b7e871977d521a003f5d0ca280dccf99d30b.png"
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/c8f087077363ee87acd1d2960c5da9f5153ad0a4.jpg",
+               "aid" : 14057485
+            }
+         ],
+         "mid" : 5311795
+      },
+      {
+         "name" : "H",
+         "mtime" : 1497154784,
+         "state" : 2,
+         "favoured" : 0,
+         "max_count" : 999,
+         "cover" : [
+            {
+               "aid" : 9513427,
+               "pic" : "http://i0.hdslb.com/bfs/archive/bbbfa4924893edadebd2dd2974231d367cfb021c.jpg"
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 1,
+         "fid" : 66683073,
+         "ctime" : 1497154778,
+         "atten_count" : 0
+      },
+      {
+         "atten_count" : 0,
+         "ctime" : 1496410936,
+         "cover" : [
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/502f31282a85a3dea576e4fe232cd1f9e7a9fb92.jpg",
+               "aid" : 2712572
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/afa1073371f10cf04a2095e7ed8585e03158179c.jpg",
+               "aid" : 13430278
+            },
+            {
+               "aid" : 10989901,
+               "pic" : "http://i1.hdslb.com/bfs/archive/dfb0590c789d83b33ea2053e74e8dd3e7388e4a0.jpg"
+            }
+         ],
+         "mid" : 5311795,
+         "cur_count" : 3,
+         "fid" : 65828706,
+         "name" : "混剪",
+         "mtime" : 1503481432,
+         "state" : 2,
+         "max_count" : 999,
+         "favoured" : 0
+      },
+      {
+         "ctime" : 1496410723,
+         "atten_count" : 0,
+         "mtime" : 1496410726,
+         "state" : 2,
+         "favoured" : 0,
+         "max_count" : 999,
+         "name" : "萝莉正太",
+         "cur_count" : 1,
+         "fid" : 65828168,
+         "cover" : [
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/3e5423f2cf26ad5af9af83bbde20df1b62986de1.jpg",
+               "aid" : 10990092
+            }
+         ],
+         "mid" : 5311795
+      },
+      {
+         "max_count" : 999,
+         "favoured" : 0,
+         "mtime" : 1503480786,
+         "state" : 2,
+         "name" : "科技发明",
+         "fid" : 65827601,
+         "cur_count" : 13,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/3fb29f15cebb3e5e8aa61598c39cb2ffd498cba6.jpg",
+               "aid" : 11369694
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/a9f3f98600d87d02101b694bc57e9f4c527eaa3d.jpg",
+               "aid" : 11975608
+            },
+            {
+               "aid" : 12102847,
+               "pic" : "http://i2.hdslb.com/bfs/archive/36c0ddac3c14f00c0aaac1fb7503e5c1bfb8b76d.jpg"
+            }
+         ],
+         "ctime" : 1496410489,
+         "atten_count" : 0
+      },
+      {
+         "cur_count" : 2,
+         "fid" : 65825201,
+         "cover" : [
+            {
+               "aid" : 10264772,
+               "pic" : "http://i1.hdslb.com/bfs/archive/913b12c4f0eca947b1693a4d82e447b1ec58ea35.jpg"
+            },
+            {
+               "aid" : 10433382,
+               "pic" : "http://i2.hdslb.com/bfs/archive/304ffdb119660a2dfdc713743481a1408a28af62.jpg"
+            }
+         ],
+         "mid" : 5311795,
+         "state" : 2,
+         "mtime" : 1496410077,
+         "favoured" : 0,
+         "max_count" : 999,
+         "name" : "跑酷",
+         "atten_count" : 0,
+         "ctime" : 1496409508
+      },
+      {
+         "name" : "可爱猫咪",
+         "favoured" : 0,
+         "max_count" : 999,
+         "mtime" : 1514275492,
+         "state" : 2,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/8df2de16b13d95eff9ba06a35a83d29ba6bc88e4.jpg",
+               "aid" : 17467692
+            },
+            {
+               "pic" : "http://i0.hdslb.com/bfs/archive/74dd5b9e06884eed8c161e57ffe1622148fb073d.jpg",
+               "aid" : 10854390
+            }
+         ],
+         "fid" : 65797478,
+         "cur_count" : 2,
+         "ctime" : 1496395367,
+         "atten_count" : 0
+      },
+      {
+         "max_count" : 999,
+         "favoured" : 0,
+         "mtime" : 1496395061,
+         "state" : 2,
+         "name" : "recipes",
+         "fid" : 65797005,
+         "cur_count" : 1,
+         "mid" : 5311795,
+         "cover" : [
+            {
+               "aid" : 10979738,
+               "pic" : "http://i2.hdslb.com/bfs/archive/eff8813ac1c31b6eb3049075325f8a3f337b9ded.jpg"
+            }
+         ],
+         "ctime" : 1496395058,
+         "atten_count" : 0
+      },
+      {
+         "atten_count" : 0,
+         "ctime" : 1489364488,
+         "cur_count" : 14,
+         "fid" : 55908718,
+         "cover" : [
+            {
+               "aid" : 8759193,
+               "pic" : "http://i1.hdslb.com/bfs/archive/2b41243a13c1caaf18bc68c60fee09de22a95bc9.jpg"
+            },
+            {
+               "aid" : 17978800,
+               "pic" : "http://i2.hdslb.com/bfs/archive/fab5bd1e3aabdb057b6bb5491104f167d5351a6b.jpg"
+            },
+            {
+               "pic" : "http://i2.hdslb.com/bfs/archive/f43a6ec9b92b17b945341e5b63145ef8d5e8637d.png",
+               "aid" : 16262137
+            }
+         ],
+         "mid" : 5311795,
+         "state" : 2,
+         "mtime" : 1516210453,
+         "favoured" : 0,
+         "max_count" : 999,
+         "name" : "美女"
+      }
+   ],
+   "ttl" : 1,
+   "message" : "0"
+}
+#+end_src
+
+*** DONE request.el
+CLOSED: [2018-01-29 Mon 19:11]
+:LOGBOOK:
+- State "DONE"       from              [2018-01-29 Mon 19:11]
+:END:
+
+#+begin_src emacs-lisp
+(request
+ "https://api.bilibili.com/x/v2/fav/folder?vmid=5311795&type=json"
+ :type "GET"
+ :parser 'json-read
+ :success (function*
+           (lambda (&key data &allow-other-keys)
+             (message (format "%s" data)))))
+#+end_src
+
+#+RESULTS[<2018-02-22 15:39:19> 0e0d131a015a84bc613ca3f2be631b7ba263c146]:
+: #s(request-response nil nil nil nil nil "https://api.bilibili.com/x/v2/fav/folder?vmid=5311795&type=json" nil (:type "GET" :parser json-read :success (lambda (&rest --cl-rest--) "
+: 
+: (fn &key DATA &allow-other-keys)" (let* ((data (car (cdr (plist-member --cl-rest-- ':data))))) (message (format "%s" data)))) :error #[128 "\302\300\303\301\"\"\207" [request-default-error-callback ("https://api.bilibili.com/x/v2/fav/folder?vmid=5311795&type=json") apply append] 6 "
+: 
+: (fn &rest ARGS2)"] :url "https://api.bilibili.com/x/v2/fav/folder?vmid=5311795&type=json" :response #0) #<buffer  *request curl*> nil nil curl nil)
+
+#+begin_example
+((code . 0) (data . [((fid . 6076112) (mid . 5311795) (name . \351\273\230\350\256\244\346\224\266\350\227\217\345\244\271) (max_count . 100000) (cur_count . 189) (atten_count . 0) (favoured . 0) (state . 0) (ctime . 1438922096) (mtime . 1517833138) (cover . [((aid . 8869179) (pic . http://i1.hdslb.com/bfs/archive/ea03a02047f69bb2101d71da427344ebac883172.jpg)) ((aid . 18648448) (pic . http://i1.hdslb.com/bfs/archive/7353d808ca4268a48a5fb6cf31e4700f65a20c85.jpg)) ((aid . 17110358) (pic . http://i2.hdslb.com/bfs/archive/e9a9076242c1fafc60f394a63d4edbf09b3f489a.jpg))])) ((fid . 98950759) (mid . 5311795) (name . \350\243\205\344\277\256) (max_count . 999) (cur_count . 29) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1516209077) (mtime . 1516213176) (cover . [((aid . 16810564) (pic . http://i0.hdslb.com/bfs/archive/13a6581cb3e3eea60d5bcbeb63f23211d8b29674.jpg)) ((aid . 6252268) (pic . http://i2.hdslb.com/bfs/archive/39ccbfe789367d7f50423c494b306d94151be477.jpg)) ((aid . 15319048) (pic . http://i1.hdslb.com/bfs/archive/186fc62c0adaddeaf88464f2255762feec34b416.jpg))])) ((fid . 96641749) (mid . 5311795) (name . \345\216\250\346\210\277) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1514894217) (mtime . 1515033326) (cover . [((aid . 17185784) (pic . http://i1.hdslb.com/bfs/archive/fecc2fdffdd055c84b525e65b4acf268e8bbfdeb.jpg)) ((aid . 11469310) (pic . http://i1.hdslb.com/bfs/archive/78058d49479429f191f92c47cf08fb0cf155d0eb.png))])) ((fid . 95604141) (mid . 5311795) (name . ASMR) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1514373265) (mtime . 1514373356) (cover . [((aid . 16902249) (pic . http://i0.hdslb.com/bfs/archive/917122f5344bab47f7fdbdd17a74c4e881b6e96e.png)) ((aid . 10364305) (pic . http://i0.hdslb.com/bfs/archive/7e66e62dd3479b59624caa45f41dd92d2e3fcc92.jpg))])) ((fid . 94816981) (mid . 5311795) (name . \345\255\246\344\271\240) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1513873180) (mtime . 1513873712)) ((fid . 94696493) (mid . 5311795) (name . \346\255\246\345\231\250) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1513787155) (mtime . 1513787156) (cover . [((aid . 16939552) (pic . http://i0.hdslb.com/bfs/archive/d7f055e703b3331461ed22a1bf1e0c1d431e1a92.jpg))])) ((fid . 94695775) (mid . 5311795) (name . \346\234\272\346\242\260) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1513786803) (mtime . 1513787156) (cover . [((aid . 16939552) (pic . http://i0.hdslb.com/bfs/archive/d7f055e703b3331461ed22a1bf1e0c1d431e1a92.jpg))])) ((fid . 91710732) (mid . 5311795) (name . \344\272\222\350\201\224\347\275\221) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1512009517) (mtime . 1512009523) (cover . [((aid . 16777246) (pic . http://i2.hdslb.com/bfs/archive/21cf803d6b5b5dec5fe1b8f93b628da405247ba9.jpg))])) ((fid . 91289551) (mid . 5311795) (name . \347\210\261\346\203\205) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1511698949) (mtime . 1511698955) (cover . [((aid . 16566172) (pic . http://i2.hdslb.com/bfs/archive/0cb096b790591f48ee22b03526c742b071de1c7a.jpg))])) ((fid . 91280974) (mid . 5311795) (name . \346\255\246\346\234\257) (max_count . 999) (cur_count . 4) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1511695453) (mtime . 1515335131) (cover . [((aid . 17922949) (pic . http://i1.hdslb.com/bfs/archive/3a8b5c3b3b2ffb583f7f4b8e29dde220c3a48721.jpg)) ((aid . 11952077) (pic . http://i0.hdslb.com/bfs/archive/9a6cdd406bc7449f59dfb41828bcb5e8a6beb6ef.jpg)) ((aid . 16045879) (pic . http://i1.hdslb.com/bfs/archive/cfd60bc7575adfd138ffa46fb1645fc968851605.jpg))])) ((fid . 90795112) (mid . 5311795) (name . \351\207\216\345\244\226) (max_count . 999) (cur_count . 9) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1511429769) (mtime . 1519108240) (cover . [((aid . 19768839) (pic . http://i2.hdslb.com/bfs/archive/f3175e742ac5c12b57558163f62a759aff0855e1.png)) ((aid . 18509510) (pic . http://i2.hdslb.com/bfs/archive/002312303618437cc8ef6c3b59b021f0fb8c3c68.jpg)) ((aid . 18199099) (pic . http://i1.hdslb.com/bfs/archive/d5d0e7651d223848908150c115f185196bab1355.png))])) ((fid . 90467182) (mid . 5311795) (name . \345\246\271\345\255\220) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1511177456) (mtime . 1511431402) (cover . [((aid . 15805929) (pic . http://i2.hdslb.com/bfs/archive/e2c89158db406b5c3f52371f40d959064ce94064.jpg)) ((aid . 15470086) (pic . http://i1.hdslb.com/bfs/archive/89ebe38880ed2a858cfedbbe5509fcba5988c306.jpg)) ((aid . 15713791) (pic . http://i1.hdslb.com/bfs/archive/277151e6ade4ea62566a8c30481de9a8523f07f4.jpg))])) ((fid . 88757295) (mid . 5311795) (name . \347\276\216\345\256\271) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1510144127) (mtime . 1510144129) (cover . [((aid . 15499475) (pic . http://i0.hdslb.com/bfs/archive/7c3fef6a14d1046b214c6821c5e3753dec205d7a.jpg))])) ((fid . 88755131) (mid . 5311795) (name . DIY) (max_count . 999) (cur_count . 15) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1510143233) (mtime . 1517566220) (cover . [((aid . 18664071) (pic . http://i0.hdslb.com/bfs/archive/46f23d8ed42655d55b36ee435c899bec1ba12d05.jpg)) ((aid . 16630903) (pic . http://i1.hdslb.com/bfs/archive/43626bf431c412c41a9ae2200722bbeb39caa5c2.jpg)) ((aid . 17677445) (pic . http://i1.hdslb.com/bfs/archive/3830f2ab8fb813b3f87778ce1d2125765442e641.jpg))])) ((fid . 88377356) (mid . 5311795) (name . \347\247\221\346\212\200) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1509883172) (mtime . 1517241273) (cover . [((aid . 18618251) (pic . http://i2.hdslb.com/bfs/archive/4a4750f621384ba5b86ce9a9ae9a4cce70168e20.jpg)) ((aid . 18160524) (pic . http://i2.hdslb.com/bfs/archive/435b2f3e3b33ced59009b281c1b3979b74d71539.jpg)) ((aid . 17467692) (pic . http://i0.hdslb.com/bfs/archive/8df2de16b13d95eff9ba06a35a83d29ba6bc88e4.jpg))])) ((fid . 83719107) (mid . 5311795) (name . \345\212\250\347\224\273) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1506482854) (mtime . 1506482857) (cover . [((aid . 14480624) (pic . http://i1.hdslb.com/bfs/archive/c533ca1c460559e4c9c8eb49002a3e954654a1fa.jpg))])) ((fid . 83709130) (mid . 5311795) (name . \346\260\264\346\236\234) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1506469908) (mtime . 1506590604) (cover . [((aid . 14835233) (pic . http://i2.hdslb.com/bfs/archive/f21c1ef4ae5b372ada394934e05fb100d35986db.jpg)) ((aid . 14696947) (pic . http://i1.hdslb.com/bfs/archive/01f581478a0137fd4e546896711be0967ec0c855.jpg))])) ((fid . 83709094) (mid . 5311795) (name . \347\276\216\351\243\237) (max_count . 999) (cur_count . 216) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1506469848) (mtime . 1518146701) (cover . [((aid . 19275482) (pic . http://i0.hdslb.com/bfs/archive/63e8754842d8bf724768d19af64719f86646c4bb.jpg)) ((aid . 18742395) (pic . http://i0.hdslb.com/bfs/archive/20e37a1a74ed34ca9c0578ab6450c64e54fd62ad.jpg)) ((aid . 16405432) (pic . http://i1.hdslb.com/bfs/archive/db0d0e5a9c11907e0f1047c4a76082f8f5369d07.jpg))])) ((fid . 81465941) (mid . 5311795) (name . \345\206\234\344\270\232) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504939675) (mtime . 1513786445) (cover . [((aid . 11727813) (pic . http://i1.hdslb.com/bfs/archive/59b702e915e20b90da375c3edc8558d8f5b01cd5.jpg)) ((aid . 17203580) (pic . http://i0.hdslb.com/bfs/archive/1999b331143867bf5ca7d2e72d13d2c0f7f02ff7.jpg)) ((aid . 15244658) (pic . http://i2.hdslb.com/bfs/archive/ecdb727fe24942fa6aa94ed2d6dea22c5b31d2e0.jpg))])) ((fid . 81112064) (mid . 5311795) (name . App) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504633715) (mtime . 1504633717) (cover . [((aid . 14195790) (pic . http://i1.hdslb.com/bfs/archive/c00b8a61e5c7333db9149426cb5274b5eb344fc6.jpg))])) ((fid . 80554490) (mid . 5311795) (name . \345\214\273\347\226\227) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504246271) (mtime . 1510150199) (cover . [((aid . 9664260) (pic . http://i0.hdslb.com/bfs/archive/ffa666b107e0bb872b3e04e83175b53dfa272d3d.jpg)) ((aid . 11911989) (pic . http://i1.hdslb.com/bfs/archive/b1311822c47a7b027b7444a4264d6591252e95c2.png)) ((aid . 14768566) (pic . http://i0.hdslb.com/bfs/archive/b92f3ed45663971b3fa3cc429e6fb14078de4484.jpg))])) ((fid . 80408115) (mid . 5311795) (name . \346\242\246\346\203\263) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504140355) (mtime . 1504140357) (cover . [((aid . 13128484) (pic . http://i0.hdslb.com/bfs/archive/448fbd90c4415563831ccb4b5ac1b8503d00e63b.jpg))])) ((fid . 80407353) (mid . 5311795) (name . \344\271\235\345\267\236) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504139532) (mtime . 1504139533) (cover . [((aid . 13969864) (pic . http://i1.hdslb.com/bfs/archive/395479fd50b0827ed6bf6ebd8cfced99adac18ec.jpg))])) ((fid . 79349712) (mid . 5311795) (name . \346\255\246\344\276\240) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1503572359) (mtime . 1503572361) (cover . [((aid . 13482815) (pic . http://i0.hdslb.com/bfs/archive/95f0d4bc9ab19e2a75e143edb85e51dda839cc20.jpg))])) ((fid . 79174776) (mid . 5311795) (name . \347\224\265\345\275\261) (max_count . 999) (cur_count . 9) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1503481724) (mtime . 1517029292) (cover . [((aid . 18679577) (pic . http://i0.hdslb.com/bfs/archive/235111ac43ceb48fe870c226e23fc315b3dbd2f9.jpg)) ((aid . 17922203) (pic . http://i2.hdslb.com/bfs/archive/44c315fd4eadf7391ff3adf2719981e69e330218.jpg)) ((aid . 18010736) (pic . http://i1.hdslb.com/bfs/archive/a8ddcfd33874bc3330cce625318391f649952ca9.jpg))])) ((fid . 79166925) (mid . 5311795) (name . \345\217\244\351\243\216\344\271\220\346\233\262) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1503478809) (mtime . 1503478812) (cover . [((aid . 13506043) (pic . http://i2.hdslb.com/bfs/archive/d7602a40ae530381f516235b270e6a7f59e5d3ee.jpg))])) ((fid . 78179778) (mid . 5311795) (name . \345\217\244\351\243\216\347\276\216\345\245\263) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1502966655) (mtime . 1509146860) (cover . [((aid . 13499850) (pic . http://i1.hdslb.com/bfs/archive/03567a9563546b2e92c74d3c08d355c4f7ec411b.jpg)) ((aid . 15609471) (pic . http://i0.hdslb.com/bfs/archive/9de4d2a8759161d7a0259ee4f1c1bb2b469573e5.jpg)) ((aid . 13707474) (pic . http://i0.hdslb.com/bfs/archive/8f2b97ae94d5ecbbb8002adfdd96aa9ed65ea736.jpg))])) ((fid . 78098427) (mid . 5311795) (name . \350\210\236\350\271\210) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1502930302) (mtime . 1502930303) (cover . [((aid . 13365089) (pic . http://i0.hdslb.com/bfs/archive/4624ffe9561fbea8127423291330e0957c86bd2b.jpg))])) ((fid . 75781637) (mid . 5311795) (name . \345\233\275\345\256\266\346\224\277\345\272\234\346\224\277\347\255\226) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1501919722) (mtime . 1501919725) (cover . [((aid . 12952728) (pic . http://i2.hdslb.com/bfs/archive/4b94a9f9e8c98d28c677a0de658c3f6c218357e0.png))])) ((fid . 66683570) (mid . 5311795) (name . \346\255\214\346\233\262) (max_count . 999) (cur_count . 4) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1497154964) (mtime . 1516262965) (cover . [((aid . 18229410) (pic . http://i0.hdslb.com/bfs/archive/0a23b4c9a9ea9b070b2147fba58b7ea5401b5124.png)) ((aid . 17387818) (pic . http://i1.hdslb.com/bfs/archive/b0a3b7e871977d521a003f5d0ca280dccf99d30b.png)) ((aid . 14057485) (pic . http://i0.hdslb.com/bfs/archive/c8f087077363ee87acd1d2960c5da9f5153ad0a4.jpg))])) ((fid . 66683073) (mid . 5311795) (name . H) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1497154778) (mtime . 1497154784) (cover . [((aid . 9513427) (pic . http://i0.hdslb.com/bfs/archive/bbbfa4924893edadebd2dd2974231d367cfb021c.jpg))])) ((fid . 65828706) (mid . 5311795) (name . \346\267\267\345\211\252) (max_count . 999) (cur_count . 3) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496410936) (mtime . 1503481432) (cover . [((aid . 2712572) (pic . http://i0.hdslb.com/bfs/archive/502f31282a85a3dea576e4fe232cd1f9e7a9fb92.jpg)) ((aid . 13430278) (pic . http://i0.hdslb.com/bfs/archive/afa1073371f10cf04a2095e7ed8585e03158179c.jpg)) ((aid . 10989901) (pic . http://i1.hdslb.com/bfs/archive/dfb0590c789d83b33ea2053e74e8dd3e7388e4a0.jpg))])) ((fid . 65828168) (mid . 5311795) (name . \350\220\235\350\216\211\346\255\243\345\244\252) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496410723) (mtime . 1496410726) (cover . [((aid . 10990092) (pic . http://i2.hdslb.com/bfs/archive/3e5423f2cf26ad5af9af83bbde20df1b62986de1.jpg))])) ((fid . 65827601) (mid . 5311795) (name . \347\247\221\346\212\200\345\217\221\346\230\216) (max_count . 999) (cur_count . 13) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496410489) (mtime . 1503480786) (cover . [((aid . 11369694) (pic . http://i0.hdslb.com/bfs/archive/3fb29f15cebb3e5e8aa61598c39cb2ffd498cba6.jpg)) ((aid . 11975608) (pic . http://i0.hdslb.com/bfs/archive/a9f3f98600d87d02101b694bc57e9f4c527eaa3d.jpg)) ((aid . 12102847) (pic . http://i2.hdslb.com/bfs/archive/36c0ddac3c14f00c0aaac1fb7503e5c1bfb8b76d.jpg))])) ((fid . 65825201) (mid . 5311795) (name . \350\267\221\351\205\267) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496409508) (mtime . 1496410077) (cover . [((aid . 10264772) (pic . http://i1.hdslb.com/bfs/archive/913b12c4f0eca947b1693a4d82e447b1ec58ea35.jpg)) ((aid . 10433382) (pic . http://i2.hdslb.com/bfs/archive/304ffdb119660a2dfdc713743481a1408a28af62.jpg))])) ((fid . 65797478) (mid . 5311795) (name . \345\217\257\347\210\261\347\214\253\345\222\252) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496395367) (mtime . 1514275492) (cover . [((aid . 17467692) (pic . http://i0.hdslb.com/bfs/archive/8df2de16b13d95eff9ba06a35a83d29ba6bc88e4.jpg)) ((aid . 10854390) (pic . http://i0.hdslb.com/bfs/archive/74dd5b9e06884eed8c161e57ffe1622148fb073d.jpg))])) ((fid . 65797005) (mid . 5311795) (name . recipes) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496395058) (mtime . 1496395061) (cover . [((aid . 10979738) (pic . http://i2.hdslb.com/bfs/archive/eff8813ac1c31b6eb3049075325f8a3f337b9ded.jpg))])) ((fid . 55908718) (mid . 5311795) (name . \347\276\216\345\245\263) (max_count . 999) (cur_count . 14) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1489364488) (mtime . 1516210453) (cover . [((aid . 8759193) (pic . http://i1.hdslb.com/bfs/archive/2b41243a13c1caaf18bc68c60fee09de22a95bc9.jpg)) ((aid . 17978800) (pic . http://i2.hdslb.com/bfs/archive/fab5bd1e3aabdb057b6bb5491104f167d5351a6b.jpg)) ((aid . 16262137) (pic . http://i2.hdslb.com/bfs/archive/f43a6ec9b92b17b945341e5b63145ef8d5e8637d.png))]))]) (message . 0) (ttl . 1))
+#+end_example
+
+*** DONE fid example
+CLOSED: [2018-01-29 Mon 01:08]
+:LOGBOOK:
+- State "DONE"       from              [2018-01-29 Mon 01:08]
+:END:
+
+#+begin_example
+https://space.bilibili.com/5311795/#/favlist?fid=83709094
+#+end_example
+
+*** DONE favlist retrieve result
+CLOSED: [2018-02-22 Thu 17:03]
+:LOGBOOK:
+- State "DONE"       from              [2018-02-22 Thu 17:03]
+:END:
+
+#+begin_src shell :results code :wrap src json
+curl -X GET "https://api.bilibili.com/x/v2/fav/video?vmid=5311795&fid=83709094&type=json" | json_pp
+#+end_src
+
+#+RESULTS[<2018-02-22 16:58:57> ecdaa2daa31e75a369a6c3fcbe6bba7a3c7eed63]:
+#+begin_src json
+{
+   "message" : "0",
+   "data" : {
+      "pagesize" : 30,
+      "tlist" : [
+         {
+            "count" : 214,
+            "name" : "生活",
+            "tid" : 160
+         },
+         {
+            "tid" : 36,
+            "name" : "科技",
+            "count" : 2
+         }
+      ],
+      "pagecount" : 8,
+      "fid" : 83709094,
+      "mid" : 5311795,
+      "order" : "",
+      "page" : 1,
+      "tid" : 0,
+      "seid" : "2710185839437396204",
+      "archives" : [
+         {
+            "highlight_title" : "听说你们的蛙蛙都去旅行了，其实他已经被小哥用竹筒煮了",
+            "duration" : 210,
+            "title" : "听说你们的蛙蛙都去旅行了，其实他已经被小哥用竹筒煮了",
+            "rights" : {
+               "elec" : 0,
+               "download" : 0,
+               "no_reprint" : 1,
+               "movie" : 0,
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0
+            },
+            "dynamic" : "你们的蛙蛙迟迟不回家？其实它已经被小哥用竹筒煮了",
+            "tname" : "美食圈",
+            "desc" : "农村小伙用竹筒秘制田鸡，这种动物很多人都不敢吃。小哥却用竹筒一顿炮制，做出了一道下酒硬菜。喜欢我们的视频欢迎点个关注点个赞！欢迎在视频下方评论下期食材哦。",
+            "ctime" : 1518008917,
+            "fav_at" : 1518146701,
+            "copyright" : 1,
+            "stat" : {
+               "reply" : 1032,
+               "share" : 383,
+               "danmaku" : 1103,
+               "like" : 684,
+               "view" : 154679,
+               "coin" : 603,
+               "aid" : 19275482,
+               "his_rank" : 0,
+               "now_rank" : 0,
+               "favorite" : 463
+            },
+            "pubdate" : 1518008917,
+            "owner" : {
+               "name" : "菜来道",
+               "face" : "http://i0.hdslb.com/bfs/face/2c5b655736b08405c98f143f50aed4e5720d360f.jpg",
+               "mid" : 125454930
+            },
+            "tid" : 76,
+            "attribute" : 16512,
+            "state" : 0,
+            "pic" : "http://i0.hdslb.com/bfs/archive/63e8754842d8bf724768d19af64719f86646c4bb.jpg",
+            "aid" : 19275482,
+            "videos" : 1,
+            "play_num" : "154679"
+         },
+         {
+            "owner" : {
+               "name" : "我要嗨TV",
+               "mid" : 121165708,
+               "face" : "http://i1.hdslb.com/bfs/face/30308d0931e556ecb713c77d14a5d2ade6e36fee.jpg"
+            },
+            "stat" : {
+               "coin" : 23,
+               "now_rank" : 0,
+               "favorite" : 236,
+               "his_rank" : 0,
+               "aid" : 18742395,
+               "like" : 60,
+               "danmaku" : 103,
+               "view" : 46536,
+               "reply" : 46,
+               "share" : 39
+            },
+            "pubdate" : 1516933935,
+            "state" : 0,
+            "attribute" : 16384,
+            "tid" : 76,
+            "videos" : 1,
+            "pic" : "http://i0.hdslb.com/bfs/archive/20e37a1a74ed34ca9c0578ab6450c64e54fd62ad.jpg",
+            "aid" : 18742395,
+            "play_num" : "46536",
+            "duration" : 114,
+            "title" : "丛林烟熏原味培根，这才是最正宗的味道",
+            "rights" : {
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "download" : 0,
+               "elec" : 0,
+               "movie" : 0,
+               "no_reprint" : 0
+            },
+            "highlight_title" : "丛林烟熏原味培根，这才是最正宗的味道",
+            "dynamic" : "",
+            "ctime" : 1516933935,
+            "tname" : "美食圈",
+            "desc" : "自己可以去户外尝试着做一下的美食，尝试一下自己做的原始美味烟熏腊肉！",
+            "copyright" : 1,
+            "fav_at" : 1517566568
+         },
+         {
+            "duration" : 293,
+            "rights" : {
+               "no_reprint" : 1,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "pay" : 0,
+               "hd5" : 0,
+               "bp" : 0
+            },
+            "title" : "丛林炭烤羊腿，甘香可口，没吃过不足以谈人生",
+            "highlight_title" : "丛林炭烤羊腿，甘香可口，没吃过不足以谈人生",
+            "dynamic" : "秘制炭烤羊腿，唯独美食不可辜负",
+            "ctime" : 1510906839,
+            "tname" : "美食圈",
+            "desc" : "农村小伙在石榴地上烤羊腿，用盐和胡椒粉腌制后慢火烤制，最好撒上孜然粉。香喷喷的烤羊腿出炉，片出来一块块，吃起来比牛肉干还好吃。如果你们有什么建议可以在视频下方留言告诉我，分享一下羊腿更多好吃的做法。",
+            "copyright" : 1,
+            "fav_at" : 1517322743,
+            "owner" : {
+               "mid" : 125454930,
+               "face" : "http://i0.hdslb.com/bfs/face/2c5b655736b08405c98f143f50aed4e5720d360f.jpg",
+               "name" : "菜来道"
+            },
+            "stat" : {
+               "coin" : 549,
+               "now_rank" : 0,
+               "favorite" : 116,
+               "his_rank" : 0,
+               "aid" : 16405432,
+               "like" : 261,
+               "danmaku" : 572,
+               "view" : 53117,
+               "reply" : 111,
+               "share" : 68
+            },
+            "pubdate" : 1510908517,
+            "state" : 0,
+            "tid" : 76,
+            "attribute" : 49280,
+            "videos" : 1,
+            "pic" : "http://i1.hdslb.com/bfs/archive/db0d0e5a9c11907e0f1047c4a76082f8f5369d07.jpg",
+            "aid" : 16405432,
+            "play_num" : "53117"
+         },
+         {
+            "ctime" : 1516361722,
+            "desc" : "农村小伙秘制竹筒烤鸡，整只鸡腌制好之后塞入竹筒，大火烧40分钟。烤出来的鸡肉芳香扑鼻！这样的鸡才是大自然真正的味道！如果你觉得还有特别好吃的做法，可以在视频下方告诉我哦！在评论区猜下期食材，抽三位抽中的馋猫送神秘礼物！PS：越眼熟的越容易中奖哦！",
+            "tname" : "美食圈",
+            "copyright" : 1,
+            "fav_at" : 1517322558,
+            "rights" : {
+               "no_reprint" : 1,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "pay" : 0,
+               "hd5" : 0,
+               "bp" : 0
+            },
+            "title" : "解锁吃鸡的正确姿势，这才是真正的竹筒烤鸡！",
+            "duration" : 250,
+            "highlight_title" : "解锁吃鸡的正确姿势，这才是真正的竹筒烤鸡！",
+            "dynamic" : "在评论区猜下期食材，抽三位抽中的馋猫送神秘礼物！",
+            "videos" : 1,
+            "aid" : 18487091,
+            "pic" : "http://i0.hdslb.com/bfs/archive/4be6f7bcb2e138696edbd0683de3b56c814ef2e1.jpg",
+            "play_num" : "132007",
+            "owner" : {
+               "mid" : 125454930,
+               "face" : "http://i0.hdslb.com/bfs/face/2c5b655736b08405c98f143f50aed4e5720d360f.jpg",
+               "name" : "菜来道"
+            },
+            "pubdate" : 1516361721,
+            "stat" : {
+               "view" : 132007,
+               "danmaku" : 1300,
+               "like" : 614,
+               "reply" : 626,
+               "share" : 245,
+               "favorite" : 397,
+               "now_rank" : 0,
+               "his_rank" : 0,
+               "aid" : 18487091,
+               "coin" : 1037
+            },
+            "state" : 0,
+            "tid" : 76,
+            "attribute" : 16512
+         },
+         {
+            "dynamic" : "",
+            "highlight_title" : "原始味道的牛排，吃出一种原味感！",
+            "rights" : {
+               "download" : 0,
+               "elec" : 0,
+               "movie" : 0,
+               "no_reprint" : 0,
+               "bp" : 0,
+               "pay" : 0,
+               "hd5" : 0
+            },
+            "title" : "原始味道的牛排，吃出一种原味感！",
+            "duration" : 100,
+            "fav_at" : 1517064003,
+            "copyright" : 1,
+            "desc" : "户外美食怀念原始的味道，正好看到这样一份原始风味的牛排，美美的味道！",
+            "tname" : "美食圈",
+            "ctime" : 1516757657,
+            "tid" : 76,
+            "attribute" : 16384,
+            "state" : -4,
+            "pubdate" : 1516757656,
+            "stat" : {
+               "share" : 6,
+               "reply" : 26,
+               "view" : 22658,
+               "danmaku" : 34,
+               "like" : 25,
+               "his_rank" : 0,
+               "aid" : 18660908,
+               "favorite" : 51,
+               "now_rank" : 0,
+               "coin" : 7
+            },
+            "owner" : {
+               "mid" : 121165708,
+               "face" : "http://i2.hdslb.com/bfs/face/30308d0931e556ecb713c77d14a5d2ade6e36fee.jpg",
+               "name" : "我要嗨TV"
+            },
+            "play_num" : "22658",
+            "aid" : 18660908,
+            "pic" : "http://i2.hdslb.com/bfs/archive/d0d7d0cafacc85562840d25bb46b7edced566853.jpg",
+            "videos" : 1
+         },
+         {
+            "pic" : "http://i1.hdslb.com/bfs/archive/9b0d95a77329d829d43c26bc416c68191dacbfdb.png",
+            "aid" : 18430748,
+            "videos" : 1,
+            "play_num" : "89193",
+            "stat" : {
+               "coin" : 109,
+               "his_rank" : 0,
+               "aid" : 18430748,
+               "now_rank" : 0,
+               "favorite" : 4353,
+               "share" : 358,
+               "reply" : 327,
+               "danmaku" : 669,
+               "like" : 341,
+               "view" : 89193
+            },
+            "pubdate" : 1516618841,
+            "owner" : {
+               "name" : "爆炸实验室bomblab",
+               "mid" : 105588685,
+               "face" : "http://i2.hdslb.com/bfs/face/6188b546ccb0cbb586ab5bc9ec40faa55767f692.jpg"
+            },
+            "tid" : 124,
+            "attribute" : 16384,
+            "state" : 0,
+            "tname" : "趣味科普人文",
+            "desc" : "转载自：https://www.youtube.com/watch?v=7NRg-lKysvU  UP主：Foody Tube\n【搬运视频】\r\n\n视频原标题：10 Egg Hacks\r\n\r\n\n\n每天一个科学小实验 ，关注微信公众号：爆炸实验室",
+            "ctime" : 1516618841,
+            "fav_at" : 1517063989,
+            "copyright" : 2,
+            "highlight_title" : "10个让你大饱口福的鸡蛋技巧",
+            "duration" : 282,
+            "rights" : {
+               "elec" : 0,
+               "download" : 0,
+               "no_reprint" : 0,
+               "movie" : 0,
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0
+            },
+            "title" : "10个让你大饱口福的鸡蛋技巧",
+            "dynamic" : ""
+         },
+         {
+            "play_num" : "25819",
+            "aid" : 18268287,
+            "pic" : "http://i1.hdslb.com/bfs/archive/b31887d70d2328706e5fb4cdc1b81aa22977011e.jpg",
+            "videos" : 1,
+            "tid" : 76,
+            "attribute" : 16512,
+            "state" : 0,
+            "pubdate" : 1515843722,
+            "stat" : {
+               "view" : 25819,
+               "danmaku" : 226,
+               "like" : 484,
+               "reply" : 107,
+               "share" : 23,
+               "coin" : 1466,
+               "favorite" : 87,
+               "now_rank" : 0,
+               "aid" : 18268287,
+               "his_rank" : 0
+            },
+            "owner" : {
+               "name" : "菜来道",
+               "mid" : 125454930,
+               "face" : "http://i0.hdslb.com/bfs/face/2c5b655736b08405c98f143f50aed4e5720d360f.jpg"
+            },
+            "fav_at" : 1517063270,
+            "copyright" : 1,
+            "desc" : "农村小伙用一根竹子做成了一个蒸炉，把湖南名菜雪花丸子做出粤菜点心风味！喜欢我们的视频可以点点收藏点点个关注，下期更精彩！",
+            "tname" : "美食圈",
+            "ctime" : 1515843722,
+            "dynamic" : "竹子瞬间变蒸炉，雪花丸子都被玩坏了",
+            "highlight_title" : "一根竹子做成的蒸炉！雪花丸子最终是粤菜还是湘菜？",
+            "rights" : {
+               "movie" : 0,
+               "no_reprint" : 1,
+               "download" : 0,
+               "elec" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0
+            },
+            "title" : "一根竹子做成的蒸炉！雪花丸子最终是粤菜还是湘菜？",
+            "duration" : 198
+         },
+         {
+            "tname" : "美食圈",
+            "desc" : "农村小伙用竹筒秘制五花肉，塞入几只咸蛋黄一起炖，炖出来的五花肉味香肉浓，肥而不腻！吃过的朋友都说一级棒。如果你还有更好的做法可以评论告诉我哦，欢迎在视频下方评论竞猜下期食材，猜中可以获得神秘礼物哟！",
+            "ctime" : 1516964585,
+            "fav_at" : 1517063230,
+            "copyright" : 1,
+            "highlight_title" : "竹筒已经焖好了，小哥却吃了你们的蛋黄酿叉烧",
+            "duration" : 243,
+            "title" : "竹筒已经焖好了，小哥却吃了你们的蛋黄酿叉烧",
+            "rights" : {
+               "movie" : 0,
+               "no_reprint" : 1,
+               "download" : 0,
+               "elec" : 0,
+               "pay" : 0,
+               "hd5" : 0,
+               "bp" : 0
+            },
+            "dynamic" : "一条被小伙玩坏的五花肉，出炉的一瞬间，满屏双击666",
+            "pic" : "http://i2.hdslb.com/bfs/archive/1163bef469c3b42d0031e2f9a75f9df9c067ef64.jpg",
+            "aid" : 18761403,
+            "videos" : 1,
+            "play_num" : "164126",
+            "stat" : {
+               "aid" : 18761403,
+               "his_rank" : 0,
+               "now_rank" : 0,
+               "favorite" : 1819,
+               "coin" : 659,
+               "share" : 441,
+               "reply" : 463,
+               "danmaku" : 947,
+               "like" : 738,
+               "view" : 164128
+            },
+            "pubdate" : 1516964585,
+            "owner" : {
+               "name" : "菜来道",
+               "mid" : 125454930,
+               "face" : "http://i0.hdslb.com/bfs/face/2c5b655736b08405c98f143f50aed4e5720d360f.jpg"
+            },
+            "tid" : 76,
+            "attribute" : 16512,
+            "state" : 0
+         },
+         {
+            "title" : "【英国街头小吃】铁板芝士热狗",
+            "rights" : {
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0,
+               "movie" : 0,
+               "no_reprint" : 0,
+               "download" : 0,
+               "elec" : 0
+            },
+            "duration" : 171,
+            "highlight_title" : "【英国街头小吃】铁板芝士热狗",
+            "dynamic" : "",
+            "ctime" : 1515248607,
+            "desc" : "总感觉外国热狗用的香肠比这边长",
+            "tname" : "美食圈",
+            "copyright" : 2,
+            "fav_at" : 1516428414,
+            "owner" : {
+               "mid" : 75985264,
+               "face" : "http://i2.hdslb.com/bfs/face/292593dbd383407f1f6f98111d207f94b2a65382.jpg",
+               "name" : "章鱼情报局"
+            },
+            "pubdate" : 1515248607,
+            "stat" : {
+               "now_rank" : 0,
+               "favorite" : 504,
+               "his_rank" : 0,
+               "aid" : 18038761,
+               "coin" : 32,
+               "danmaku" : 179,
+               "like" : 85,
+               "view" : 72774,
+               "share" : 167,
+               "reply" : 122
+            },
+            "state" : 0,
+            "attribute" : 49152,
+            "tid" : 76,
+            "videos" : 1,
+            "aid" : 18038761,
+            "pic" : "http://i2.hdslb.com/bfs/archive/20bb99190c1c0b7f90a0867d6d86a11b173594cc.jpg",
+            "play_num" : "72774"
+         },
+         {
+            "videos" : 1,
+            "aid" : 18335402,
+            "pic" : "http://i1.hdslb.com/bfs/archive/0845cae5c3ad9d7e475aef00fcba39436ca5f969.jpg",
+            "play_num" : "291536",
+            "owner" : {
+               "name" : "好好吃短视频",
+               "mid" : 75491220,
+               "face" : "http://i2.hdslb.com/bfs/face/7561d7a14b4d6ab4900bf1885e3b5efe9e688e95.jpg"
+            },
+            "pubdate" : 1516021243,
+            "stat" : {
+               "reply" : 415,
+               "share" : 694,
+               "like" : 842,
+               "danmaku" : 552,
+               "view" : 291536,
+               "aid" : 18335402,
+               "his_rank" : 82,
+               "now_rank" : 0,
+               "favorite" : 7522,
+               "coin" : 503
+            },
+            "state" : 0,
+            "attribute" : 16512,
+            "tid" : 76,
+            "ctime" : 1516021243,
+            "desc" : "茶香烟熏鸭属于粤菜菜系，主要原料是鸭，加上适量葱姜、花椒，运用梅酒等调料，熏制后炸至金黄色，制作工艺简单，可口美味。茶香烟熏鸭是夏天最受嗜肉族欢迎的，因为鸭肉性凉，很适合骄阳似火的季节 。",
+            "tname" : "美食圈",
+            "copyright" : 1,
+            "fav_at" : 1516428228,
+            "rights" : {
+               "movie" : 0,
+               "no_reprint" : 1,
+               "download" : 0,
+               "elec" : 0,
+               "pay" : 0,
+               "hd5" : 0,
+               "bp" : 0
+            },
+            "title" : "这只鸭入选《舌尖上的中国》，最受嗜肉族欢迎，制作秘诀在此",
+            "duration" : 121,
+            "highlight_title" : "这只鸭入选《舌尖上的中国》，最受嗜肉族欢迎，制作秘诀在此",
+            "dynamic" : ""
+         },
+         {
+            "dynamic" : "",
+            "highlight_title" : "比麻辣烫更够味的麻辣拌，最适合大半夜吃了呢~",
+            "duration" : 114,
+            "rights" : {
+               "no_reprint" : 1,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "pay" : 0,
+               "hd5" : 0,
+               "bp" : 0
+            },
+            "title" : "比麻辣烫更够味的麻辣拌，最适合大半夜吃了呢~",
+            "fav_at" : 1516214910,
+            "copyright" : 1,
+            "tname" : "美食圈",
+            "desc" : "大东北的麻辣拌！\n大哥妹儿整起来！",
+            "ctime" : 1500463412,
+            "tid" : 76,
+            "attribute" : 49280,
+            "state" : 0,
+            "stat" : {
+               "view" : 51150,
+               "like" : 17,
+               "danmaku" : 370,
+               "share" : 288,
+               "reply" : 239,
+               "favorite" : 2669,
+               "now_rank" : 0,
+               "his_rank" : 0,
+               "aid" : 12364556,
+               "coin" : 179
+            },
+            "pubdate" : 1500477344,
+            "owner" : {
+               "name" : "好好吃短视频",
+               "face" : "http://i2.hdslb.com/bfs/face/7561d7a14b4d6ab4900bf1885e3b5efe9e688e95.jpg",
+               "mid" : 75491220
+            },
+            "play_num" : "51150",
+            "pic" : "http://i2.hdslb.com/bfs/archive/c587339ab27449b8869931353fa47fdcebdfeddd.jpg",
+            "aid" : 12364556,
+            "videos" : 1
+         },
+         {
+            "dynamic" : "",
+            "rights" : {
+               "movie" : 0,
+               "no_reprint" : 0,
+               "download" : 0,
+               "elec" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0
+            },
+            "title" : "夜宵吃个脆皮烧肉，虽然木有小萝莉，不过看起来也好好吃(¯﹃¯)",
+            "duration" : 311,
+            "highlight_title" : "夜宵吃个脆皮烧肉，虽然木有小萝莉，不过看起来也好好吃(¯﹃¯)",
+            "copyright" : 2,
+            "fav_at" : 1516214883,
+            "ctime" : 1497433757,
+            "desc" : "转载自https://www.youtube.com/watch?v=iQhHSU6YdzQ\n夜宵吃个脆皮烧肉，虽然木有小萝莉，不过看起来也好好吃(¯﹃¯)",
+            "tname" : "美食圈",
+            "state" : 0,
+            "attribute" : 49152,
+            "tid" : 76,
+            "owner" : {
+               "name" : "吾乃呆呆",
+               "face" : "http://i2.hdslb.com/bfs/face/14999cb049a22269412ba88f5065b5f6314999f3.jpg",
+               "mid" : 17660494
+            },
+            "pubdate" : 1493657848,
+            "stat" : {
+               "favorite" : 4514,
+               "now_rank" : 0,
+               "aid" : 10247845,
+               "his_rank" : 0,
+               "coin" : 123,
+               "view" : 287609,
+               "like" : 138,
+               "danmaku" : 1138,
+               "share" : 402,
+               "reply" : 272
+            },
+            "play_num" : "287609",
+            "videos" : 1,
+            "aid" : 10247845,
+            "pic" : "http://i2.hdslb.com/bfs/archive/73b1989ae4841c1eab1daa2f20a0cff1c98fb4b7.jpg"
+         },
+         {
+            "fav_at" : 1516214753,
+            "copyright" : 2,
+            "tname" : "美食圈",
+            "desc" : "http://www.youtube.com/watch?v=1lcFOBfyAvo\n斯洛文尼亚骨髓餐厅 肉食者盛宴\nSlovenian Bone Marrow Restaurant\n高清画质 FHD源",
+            "ctime" : 1503392734,
+            "dynamic" : "",
+            "highlight_title" : "【空腹禁观】美味骨髓餐厅 大型骨 - 斯洛文尼亚 肉食者盛宴 高清画质 Slovenian Bone Marrow Restaurant",
+            "duration" : 96,
+            "rights" : {
+               "pay" : 0,
+               "hd5" : 0,
+               "bp" : 0,
+               "movie" : 0,
+               "no_reprint" : 0,
+               "download" : 0,
+               "elec" : 0
+            },
+            "title" : "【空腹禁观】美味骨髓餐厅 大型骨 - 斯洛文尼亚 肉食者盛宴 高清画质 Slovenian Bone Marrow Restaurant",
+            "play_num" : "780884",
+            "pic" : "http://i2.hdslb.com/bfs/archive/101997f384699d1fb3a44c86eb7e58f5febc7070.png",
+            "aid" : 13670175,
+            "videos" : 1,
+            "attribute" : 49152,
+            "tid" : 76,
+            "state" : 0,
+            "stat" : {
+               "reply" : 1268,
+               "share" : 1930,
+               "view" : 780884,
+               "like" : 325,
+               "danmaku" : 1300,
+               "aid" : 13670175,
+               "his_rank" : 12,
+               "favorite" : 5353,
+               "now_rank" : 0,
+               "coin" : 304
+            },
+            "pubdate" : 1503392734,
+            "owner" : {
+               "face" : "http://i1.hdslb.com/bfs/face/6d78fdeedc47c38c04667b2fd59c3400036c16a9.jpg",
+               "mid" : 51871133,
+               "name" : "暗影哔哩"
+            }
+         },
+         {
+            "owner" : {
+               "name" : "李子柒",
+               "mid" : 19577966,
+               "face" : "http://i1.hdslb.com/bfs/face/82d27965dae3b2fe9e52780c6309c7b37ad4cbf2.jpg"
+            },
+            "pubdate" : 1507917701,
+            "stat" : {
+               "view" : 287508,
+               "danmaku" : 3061,
+               "like" : 3069,
+               "reply" : 1206,
+               "share" : 1589,
+               "coin" : 10270,
+               "favorite" : 1873,
+               "now_rank" : 0,
+               "aid" : 15366284,
+               "his_rank" : 0
+            },
+            "state" : 0,
+            "attribute" : 49280,
+            "tid" : 76,
+            "videos" : 1,
+            "aid" : 15366284,
+            "pic" : "http://i1.hdslb.com/bfs/archive/5dcce7ca64939bc20e4a0bab1d47b8d59d22f39a.jpg",
+            "play_num" : "287508",
+            "rights" : {
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "no_reprint" : 1,
+               "movie" : 0
+            },
+            "title" : "【芋头饭】念念不忘的是小时候那芋香弥漫的味道——芋头饭",
+            "duration" : 300,
+            "highlight_title" : "【芋头饭】念念不忘的是小时候那芋香弥漫的味道——芋头饭",
+            "dynamic" : "",
+            "ctime" : 1507917705,
+            "desc" : "又该挖芋头了。\n小时候老太爷总爱做芋头饭给我吃。那时候粮食精贵，大人们就把什么芋头，豆角，南瓜，红薯这些蔬菜炒炒和米饭一并焖熟吃，这样就可以把省下来的稻谷卖成钱给家里的小祖宗们缴学费……\n如今我能做出更香更美味的芋头饭了，\n只是最先教我煮这碗饭的人已经不在…… \n\n珍惜身边人，多回家看看。",
+            "tname" : "美食圈",
+            "copyright" : 1,
+            "fav_at" : 1516214664
+         },
+         {
+            "ctime" : 1501129676,
+            "tname" : "美食圈",
+            "desc" : "这一定是我近几年来吃过最好吃的鱼 ！\n没有之一 \n吃上两口被酒气醉醺到干香的鱼肉，\n再小酌两杯新酿的覆盆子酒……\n劳资现在就是很舒坦",
+            "copyright" : 1,
+            "fav_at" : 1516214619,
+            "duration" : 425,
+            "title" : "【李子柒】火焰醉鱼 给你视觉与味觉双重极致享受",
+            "rights" : {
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "download" : 0,
+               "elec" : 0,
+               "movie" : 0,
+               "no_reprint" : 1
+            },
+            "highlight_title" : "【李子柒】火焰醉鱼 给你视觉与味觉双重极致享受",
+            "dynamic" : "",
+            "videos" : 1,
+            "pic" : "http://i2.hdslb.com/bfs/archive/4181d5bd1ce66603926dc25cfdc1a5f0c4e99292.jpg",
+            "aid" : 12633162,
+            "play_num" : "338416",
+            "owner" : {
+               "name" : "李子柒",
+               "face" : "http://i1.hdslb.com/bfs/face/82d27965dae3b2fe9e52780c6309c7b37ad4cbf2.jpg",
+               "mid" : 19577966
+            },
+            "stat" : {
+               "reply" : 566,
+               "share" : 2252,
+               "view" : 338416,
+               "like" : 1073,
+               "danmaku" : 4797,
+               "his_rank" : 0,
+               "aid" : 12633162,
+               "favorite" : 1638,
+               "now_rank" : 0,
+               "coin" : 3885
+            },
+            "pubdate" : 1501129677,
+            "state" : 0,
+            "attribute" : 49280,
+            "tid" : 76
+         },
+         {
+            "play_num" : "28475",
+            "pic" : "http://i1.hdslb.com/bfs/archive/6e4d3e91a502d5f57ebab812659845b7afefc364.jpg",
+            "aid" : 17287708,
+            "videos" : 1,
+            "tid" : 76,
+            "attribute" : 49152,
+            "state" : 0,
+            "stat" : {
+               "his_rank" : 0,
+               "aid" : 17287708,
+               "favorite" : 103,
+               "now_rank" : 0,
+               "coin" : 91,
+               "share" : 4,
+               "reply" : 99,
+               "view" : 28475,
+               "danmaku" : 187,
+               "like" : 127
+            },
+            "pubdate" : 1513353684,
+            "owner" : {
+               "mid" : 29010949,
+               "face" : "http://i2.hdslb.com/bfs/face/2604323da872d1d4161479c7cbfeb95a68d66839.jpg",
+               "name" : "去野食"
+            },
+            "fav_at" : 1516214585,
+            "copyright" : 1,
+            "tname" : "美食圈",
+            "desc" : "微博加V了\n联系我的人说是在B站发现我的\n一路走来谢谢大家的支持\nB站于我而言是特殊的，这里是首发地，是大本营；最初大家的鼓励我都记得\n当然啦，后来随着流量的增加，骂我的人，也不少\n以至于有一段时间我都不看弹幕和评论\n不过这终究是要经历的一环，想开了，也就释然了\n之后\n还是继续“相爱相杀”吧\n鞠躬，感谢",
+            "ctime" : 1513353684,
+            "dynamic" : "",
+            "highlight_title" : "去野食：拯救手残党的快手菜——手撕鸡",
+            "duration" : 187,
+            "rights" : {
+               "movie" : 0,
+               "no_reprint" : 0,
+               "download" : 0,
+               "elec" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0
+            },
+            "title" : "去野食：拯救手残党的快手菜——手撕鸡"
+         },
+         {
+            "owner" : {
+               "name" : "李子柒",
+               "mid" : 19577966,
+               "face" : "http://i1.hdslb.com/bfs/face/82d27965dae3b2fe9e52780c6309c7b37ad4cbf2.jpg"
+            },
+            "stat" : {
+               "reply" : 414,
+               "share" : 874,
+               "danmaku" : 1797,
+               "like" : 652,
+               "view" : 181528,
+               "his_rank" : 0,
+               "aid" : 12596025,
+               "now_rank" : 0,
+               "favorite" : 1016,
+               "coin" : 3290
+            },
+            "pubdate" : 1501042600,
+            "state" : 0,
+            "attribute" : 49280,
+            "tid" : 76,
+            "videos" : 1,
+            "pic" : "http://i1.hdslb.com/bfs/archive/6cca40af567b266b23d58bc75fa38280d7d6a21a.jpg",
+            "aid" : 12596025,
+            "play_num" : "181528",
+            "duration" : 300,
+            "title" : "【李子柒】又到了吃菌子的季节，这样的鸡枞油你吃过吗？",
+            "rights" : {
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0,
+               "no_reprint" : 1,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0
+            },
+            "highlight_title" : "【李子柒】又到了吃菌子的季节，这样的鸡枞油你吃过吗？",
+            "dynamic" : "",
+            "ctime" : 1501042599,
+            "tname" : "美食圈",
+            "desc" : "又到了吃菌子的季节！\n雨季过后，大山深处的白蚁窝下，这种比松茸还要美味的鸡枞菌就破土而出啦！新鲜的鸡枞菌加入青花椒和辣椒碎，熬成上好的鸡枞油。吃面的时候淋上两勺子，你会瞬间明白什么叫做好！吃！的！想！哭！",
+            "copyright" : 1,
+            "fav_at" : 1516214446
+         },
+         {
+            "ctime" : 1502093365,
+            "desc" : "小时候每到夏天，\n家里绝对少不了的日常就是‘‘种豆芽”。\n刨个坑儿浇点水，撒上豆子盖上盖儿。\n剩下的，就交给时间啦～～\n简单到手残星人都会感激涕零的法子，\n要不要一起试试？",
+            "tname" : "美食圈",
+            "copyright" : 1,
+            "fav_at" : 1516214424,
+            "rights" : {
+               "download" : 0,
+               "elec" : 0,
+               "movie" : 0,
+               "no_reprint" : 1,
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0
+            },
+            "title" : "【李子柒】小时候每到夏天， 家里绝对少不了的日常就是——种豆芽",
+            "duration" : 300,
+            "highlight_title" : "【李子柒】小时候每到夏天， 家里绝对少不了的日常就是——种豆芽",
+            "dynamic" : "",
+            "videos" : 1,
+            "aid" : 13066419,
+            "pic" : "http://i2.hdslb.com/bfs/archive/845206c2cb17750b0c76a138708378b3bb15f279.jpg",
+            "play_num" : "352875",
+            "owner" : {
+               "mid" : 19577966,
+               "face" : "http://i1.hdslb.com/bfs/face/82d27965dae3b2fe9e52780c6309c7b37ad4cbf2.jpg",
+               "name" : "李子柒"
+            },
+            "pubdate" : 1502093365,
+            "stat" : {
+               "his_rank" : 0,
+               "aid" : 13066419,
+               "favorite" : 2225,
+               "now_rank" : 0,
+               "coin" : 7827,
+               "reply" : 1530,
+               "share" : 2256,
+               "view" : 352875,
+               "like" : 1298,
+               "danmaku" : 3478
+            },
+            "state" : 0,
+            "tid" : 76,
+            "attribute" : 49280
+         },
+         {
+            "copyright" : 1,
+            "fav_at" : 1516214407,
+            "ctime" : 1505701534,
+            "desc" : "预知详细图文步骤及材料用量，请关注微信：微体社区。",
+            "tname" : "美食圈",
+            "dynamic" : "",
+            "title" : "【微体兔菜谱】午后秋乏？来块清甜爽口的椰汁西米冻提提神吧",
+            "rights" : {
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0,
+               "no_reprint" : 0,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0
+            },
+            "duration" : 226,
+            "highlight_title" : "【微体兔菜谱】午后秋乏？来块清甜爽口的椰汁西米冻提提神吧",
+            "play_num" : "71841",
+            "videos" : 1,
+            "aid" : 14572182,
+            "pic" : "http://i0.hdslb.com/bfs/archive/3d9366209d24d6e4da88bff8814ebda092faeec3.jpg",
+            "state" : 0,
+            "attribute" : 49152,
+            "tid" : 76,
+            "owner" : {
+               "name" : "微体社区",
+               "mid" : 14484094,
+               "face" : "http://i0.hdslb.com/bfs/face/2f7843cc58b7fe1cd7aa2c442ae8f9b140d7e376.jpg"
+            },
+            "pubdate" : 1505701530,
+            "stat" : {
+               "coin" : 246,
+               "aid" : 14572182,
+               "his_rank" : 84,
+               "now_rank" : 0,
+               "favorite" : 8947,
+               "reply" : 155,
+               "share" : 327,
+               "danmaku" : 473,
+               "like" : 100,
+               "view" : 71841
+            }
+         },
+         {
+            "pubdate" : 1500811766,
+            "stat" : {
+               "share" : 968,
+               "reply" : 324,
+               "like" : 253,
+               "danmaku" : 305,
+               "view" : 196382,
+               "coin" : 578,
+               "his_rank" : 80,
+               "aid" : 12505238,
+               "now_rank" : 0,
+               "favorite" : 15061
+            },
+            "owner" : {
+               "name" : "Claire的烘焙life",
+               "mid" : 31047163,
+               "face" : "http://i1.hdslb.com/bfs/face/e5acf858dbdf2b1d162cc9a15e2703a494450e8a.jpg"
+            },
+            "tid" : 76,
+            "attribute" : 49280,
+            "state" : 0,
+            "aid" : 12505238,
+            "pic" : "http://i1.hdslb.com/bfs/archive/34c08da9c5ded8437a8939365d7e5f929d249891.jpg",
+            "videos" : 1,
+            "play_num" : "196382",
+            "highlight_title" : "零难度的紫薯凉糕",
+            "title" : "零难度的紫薯凉糕",
+            "rights" : {
+               "no_reprint" : 1,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0
+            },
+            "duration" : 90,
+            "dynamic" : "",
+            "desc" : "夏日炎炎，来块冰冰凉凉香甜软糯的紫薯凉糕可好？",
+            "tname" : "美食圈",
+            "ctime" : 1500811766,
+            "fav_at" : 1516214398,
+            "copyright" : 1
+         },
+         {
+            "dynamic" : "",
+            "highlight_title" : "夏季最佳甜品【芒果糯米糍】给那些又懒又馋的小吃鬼！",
+            "rights" : {
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0,
+               "no_reprint" : 1,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0
+            },
+            "title" : "夏季最佳甜品【芒果糯米糍】给那些又懒又馋的小吃鬼！",
+            "duration" : 99,
+            "fav_at" : 1516214386,
+            "copyright" : 1,
+            "desc" : "季最佳甜品——芒果【糯米糍】[舔屏][舔屏]\n送给那些馋嘴的小吃鬼们~~你爱吃吗\n在这个炎热的夏天，它就是你的救世主",
+            "tname" : "美食圈",
+            "ctime" : 1500102333,
+            "tid" : 76,
+            "attribute" : 49280,
+            "state" : 0,
+            "pubdate" : 1500102333,
+            "stat" : {
+               "like" : 6,
+               "danmaku" : 224,
+               "view" : 49706,
+               "share" : 203,
+               "reply" : 136,
+               "coin" : 94,
+               "now_rank" : 0,
+               "favorite" : 4396,
+               "aid" : 12221942,
+               "his_rank" : 0
+            },
+            "owner" : {
+               "mid" : 155710545,
+               "face" : "http://i1.hdslb.com/bfs/face/3bc7760d915fa6a816a341359aa2fdc0863ab730.jpg",
+               "name" : "欢乐豆地煮"
+            },
+            "play_num" : "49706",
+            "aid" : 12221942,
+            "pic" : "http://i0.hdslb.com/bfs/archive/582fc71aebf1b139af6dc0116944d6f06ab06115.jpg",
+            "videos" : 1
+         },
+         {
+            "ctime" : 1497437343,
+            "desc" : "蓝闺蜜芒果的100秒快手早餐，致力于为辣妈们解决“早餐做什么、熊孩子吃什么”的世纪难题！欢迎订阅微信公众号“好好蓝闺蜜”（ID：jw-enjoylife），了解详细食谱步骤。",
+            "tname" : "美食圈",
+            "copyright" : 1,
+            "fav_at" : 1516214361,
+            "title" : "【奶香大米糕】天热早餐没奶香胃口？酥软奶香四溢的大米糕拯救一天好精神！",
+            "rights" : {
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0,
+               "no_reprint" : 0,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0
+            },
+            "duration" : 85,
+            "highlight_title" : "【奶香大米糕】天热早餐没奶香胃口？酥软奶香四溢的大米糕拯救一天好精神！",
+            "dynamic" : "",
+            "videos" : 1,
+            "aid" : 10790638,
+            "pic" : "http://i2.hdslb.com/bfs/archive/f0772c95321f8b67d820832d62804fe66bebf56a.jpg",
+            "play_num" : "60851",
+            "owner" : {
+               "name" : "好好蓝闺蜜",
+               "mid" : 49051773,
+               "face" : "http://i2.hdslb.com/bfs/face/bf12fa7c8525758dbc611d5f6bdcc8a951991900.jpg"
+            },
+            "pubdate" : 1495608267,
+            "stat" : {
+               "coin" : 117,
+               "aid" : 10790638,
+               "his_rank" : 0,
+               "now_rank" : 0,
+               "favorite" : 6708,
+               "share" : 194,
+               "reply" : 148,
+               "like" : 22,
+               "danmaku" : 123,
+               "view" : 60851
+            },
+            "state" : 0,
+            "attribute" : 49152,
+            "tid" : 76
+         },
+         {
+            "pubdate" : 1487212997,
+            "stat" : {
+               "share" : 438,
+               "reply" : 621,
+               "like" : 42,
+               "danmaku" : 1275,
+               "view" : 158657,
+               "coin" : 3871,
+               "aid" : 8643595,
+               "his_rank" : 94,
+               "now_rank" : 0,
+               "favorite" : 8604
+            },
+            "owner" : {
+               "name" : "曼食慢语",
+               "mid" : 5957440,
+               "face" : "http://i1.hdslb.com/bfs/face/5310096b1daed2224ee98a955fbee420da0269ed.jpg"
+            },
+            "tid" : 76,
+            "attribute" : 49152,
+            "state" : 0,
+            "aid" : 8643595,
+            "pic" : "http://i0.hdslb.com/bfs/archive/7644209075334e4ce827e3a862a29d37fdafd492.jpg",
+            "videos" : 1,
+            "play_num" : "158657",
+            "highlight_title" : "甜糯松软的雪蒸糕，童年记忆中的小吃",
+            "rights" : {
+               "bp" : 0,
+               "pay" : 0,
+               "hd5" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "no_reprint" : 0,
+               "movie" : 0
+            },
+            "title" : "甜糯松软的雪蒸糕，童年记忆中的小吃",
+            "duration" : 228,
+            "dynamic" : "",
+            "desc" : "从小就很喜欢吃街边的红糖米糕，松松软软，甜得恰到好处。后来知道这米糕其实有个很好听的名字叫雪蒸糕。最近想再回味这份儿时记忆，却发现街面上很难寻得。还好机智的我曾向一位街边卖米糕的奶奶打听过做法，回家一试，真的找回了记忆中的美味~\n喜欢就请向我扔硬币吧~\n\n微信订阅号：amandatastes\n新浪微博：Amanda的小厨房\n策划，主持人：Amanda 曼达\n制作单位：上海曼食文化传播有限公司",
+            "tname" : "美食圈",
+            "ctime" : 1497429340,
+            "fav_at" : 1516214349,
+            "copyright" : 1
+         },
+         {
+            "fav_at" : 1516214337,
+            "copyright" : 1,
+            "desc" : "我又动手做早餐啦~ 这次依然是用不到15分钟做出一顿丰盛的早餐：一片熔岩乳酪吐司，一杯南瓜羹，再搭配一份新鲜水果，完美！一份黄灿灿的早餐，让一整天的精神都活跃起来！\n\n喜欢就请向我扔硬币吧~\n微信订阅号及微店入口：amandatastes；淘宝店铺：曼食慢语；新浪微博：Amanda的小厨房",
+            "tname" : "美食圈",
+            "ctime" : 1499859746,
+            "dynamic" : "",
+            "highlight_title" : "【曼达小馆】打败你的起床气，就靠这道BlingBling的早餐",
+            "title" : "【曼达小馆】打败你的起床气，就靠这道BlingBling的早餐",
+            "rights" : {
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "no_reprint" : 1,
+               "movie" : 0
+            },
+            "duration" : 350,
+            "play_num" : "225733",
+            "aid" : 12134810,
+            "pic" : "http://i1.hdslb.com/bfs/archive/5b5bd084334810ca67d61a23b1e9fb9c8b864660.jpg",
+            "videos" : 1,
+            "attribute" : 49280,
+            "tid" : 76,
+            "state" : 0,
+            "pubdate" : 1499859746,
+            "stat" : {
+               "like" : 158,
+               "danmaku" : 1377,
+               "view" : 225733,
+               "reply" : 810,
+               "share" : 868,
+               "coin" : 5593,
+               "now_rank" : 0,
+               "favorite" : 8907,
+               "his_rank" : 92,
+               "aid" : 12134810
+            },
+            "owner" : {
+               "name" : "曼食慢语",
+               "mid" : 5957440,
+               "face" : "http://i1.hdslb.com/bfs/face/5310096b1daed2224ee98a955fbee420da0269ed.jpg"
+            }
+         },
+         {
+            "ctime" : 1511776836,
+            "desc" : "食谱看评论置顶，美食锅是麦子厨房的新宝宝，做法是浅平盘的食谱。",
+            "tname" : "美食圈",
+            "copyright" : 1,
+            "fav_at" : 1516214308,
+            "rights" : {
+               "elec" : 0,
+               "download" : 0,
+               "no_reprint" : 0,
+               "movie" : 0,
+               "bp" : 0,
+               "pay" : 0,
+               "hd5" : 0
+            },
+            "title" : "【5分钟蛋炒饭】别再叫外卖，少油好吃很简单的",
+            "duration" : 53,
+            "highlight_title" : "【5分钟蛋炒饭】别再叫外卖，少油好吃很简单的",
+            "dynamic" : "做过蛋炒饭的大家都知道，非常容易起坨油大不好做。像我们这种养生少年少女怎么可以吃这样的炒饭。必须娘心推荐你这个食谱哇！不粘锅也可以制作的~",
+            "videos" : 1,
+            "aid" : 16631191,
+            "pic" : "http://i1.hdslb.com/bfs/archive/0e7d58140defc1c41d41a7ca23fb3f16f45feb15.jpg",
+            "play_num" : "134919",
+            "owner" : {
+               "mid" : 9553803,
+               "face" : "http://i1.hdslb.com/bfs/face/e50cb7efc9a21954cda7d1d6817edfe86f2a407a.jpg",
+               "name" : "麦子厨房maizikitchen"
+            },
+            "pubdate" : 1511776835,
+            "stat" : {
+               "coin" : 97,
+               "now_rank" : 0,
+               "favorite" : 4118,
+               "aid" : 16631191,
+               "his_rank" : 0,
+               "danmaku" : 173,
+               "like" : 211,
+               "view" : 134919,
+               "share" : 193,
+               "reply" : 482
+            },
+            "state" : 0,
+            "attribute" : 49152,
+            "tid" : 76
+         },
+         {
+            "state" : 0,
+            "tid" : 76,
+            "attribute" : 49152,
+            "owner" : {
+               "name" : "Kyrenellll",
+               "mid" : 31383187,
+               "face" : "http://i0.hdslb.com/bfs/face/78b8faa04259478cd6be74d746dd7c16f235938a.jpg"
+            },
+            "pubdate" : 1499110874,
+            "stat" : {
+               "coin" : 56,
+               "aid" : 11863045,
+               "his_rank" : 0,
+               "now_rank" : 0,
+               "favorite" : 5919,
+               "reply" : 205,
+               "share" : 232,
+               "like" : 5,
+               "danmaku" : 350,
+               "view" : 105205
+            },
+            "play_num" : "105205",
+            "videos" : 1,
+            "aid" : 11863045,
+            "pic" : "http://i1.hdslb.com/bfs/archive/977e153e43a142be7fcb5a5e297214b6a78b739f.jpg",
+            "dynamic" : "",
+            "title" : "【甜点】彩虹冰淇淋蛋糕～无需烤箱～",
+            "rights" : {
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "no_reprint" : 0,
+               "movie" : 0
+            },
+            "duration" : 86,
+            "highlight_title" : "【甜点】彩虹冰淇淋蛋糕～无需烤箱～",
+            "copyright" : 2,
+            "fav_at" : 1516214251,
+            "ctime" : 1499110874,
+            "desc" : "https://www.instagram.com/p/BVGls3YlnA0\n天气热啦 冰淇淋就是不能停呀～(￣▽￣～)~我们家夏天冰淇淋都是一箱一箱买的 你们呐？(๑• . •๑) 这也算是牛奶和盒的废物利用？╮(￣▽￣)╭",
+            "tname" : "美食圈"
+         },
+         {
+            "duration" : 671,
+            "rights" : {
+               "no_reprint" : 0,
+               "movie" : 0,
+               "elec" : 0,
+               "download" : 0,
+               "pay" : 0,
+               "hd5" : 0,
+               "bp" : 0
+            },
+            "title" : "【深夜福利】7种可以在家里做的美味甜点 & 蛋糕 #240",
+            "highlight_title" : "【深夜福利】7种可以在家里做的美味甜点 &amp; 蛋糕 #240",
+            "dynamic" : "",
+            "ctime" : 1505147664,
+            "tname" : "美食圈",
+            "desc" : "https://www.youtube.com/watch?v=8u8YwnTBcnA\n原标题 Top 7 Tasty Recipes Video - Best Foods And Cakes From Tastemade Facebook Page #240\r\n\r\n来自 Best Tasty",
+            "copyright" : 2,
+            "fav_at" : 1516214228,
+            "owner" : {
+               "name" : "昵称没法起",
+               "mid" : 1760676,
+               "face" : "http://i2.hdslb.com/bfs/face/7c291a795ba7b57083f0ce436b260369ca128926.jpg"
+            },
+            "stat" : {
+               "share" : 190,
+               "reply" : 56,
+               "view" : 37090,
+               "danmaku" : 597,
+               "like" : 46,
+               "coin" : 44,
+               "his_rank" : 0,
+               "aid" : 14388173,
+               "favorite" : 3262,
+               "now_rank" : 0
+            },
+            "pubdate" : 1505147662,
+            "state" : 0,
+            "tid" : 76,
+            "attribute" : 49152,
+            "videos" : 1,
+            "pic" : "http://i2.hdslb.com/bfs/archive/6c3e7c183a9e214fece1c6a5cd9ecba24cecfa5a.png",
+            "aid" : 14388173,
+            "play_num" : "37090"
+         },
+         {
+            "copyright" : 2,
+            "fav_at" : 1516214198,
+            "ctime" : 1497425366,
+            "tname" : "美食圈",
+            "desc" : "YouTube 出处：watch?v=LaGc1Mde6rE\n原视频标题：【點煮易】蝶豆花白朱古力千層蛋糕|Butterfly Pea Flower Crepe Cake with White Chocolate Filling\n栏目名称：Dimcook HK",
+            "dynamic" : "",
+            "duration" : 111,
+            "title" : "蝶豆花白巧克力千层蛋糕",
+            "rights" : {
+               "download" : 0,
+               "elec" : 0,
+               "movie" : 0,
+               "no_reprint" : 0,
+               "bp" : 0,
+               "hd5" : 0,
+               "pay" : 0
+            },
+            "highlight_title" : "蝶豆花白巧克力千层蛋糕",
+            "play_num" : "20999",
+            "videos" : 1,
+            "pic" : "http://i2.hdslb.com/bfs/archive/adec4a965c9d0710294caca250014544fe081fa6.jpg",
+            "aid" : 10452924,
+            "state" : 0,
+            "tid" : 76,
+            "attribute" : 49152,
+            "owner" : {
+               "name" : "大叶伞",
+               "mid" : 939721,
+               "face" : "http://i0.hdslb.com/bfs/face/d4385b46f01ea03b468cc9fa7e84661fd02a8ccf.jpg"
+            },
+            "stat" : {
+               "coin" : 106,
+               "favorite" : 3593,
+               "now_rank" : 0,
+               "aid" : 10452924,
+               "his_rank" : 0,
+               "view" : 20999,
+               "like" : 17,
+               "danmaku" : 71,
+               "reply" : 41,
+               "share" : 128
+            },
+            "pubdate" : 1494415252
+         },
+         {
+            "play_num" : "11153",
+            "videos" : 1,
+            "aid" : 14266335,
+            "pic" : "http://i1.hdslb.com/bfs/archive/de9f7bbfc0f815f5a2b4b19616248ea871b9777a.jpg",
+            "state" : 0,
+            "attribute" : 49280,
+            "tid" : 76,
+            "owner" : {
+               "mid" : 18503938,
+               "face" : "http://i1.hdslb.com/bfs/face/89594b3f720273257c757be190db5cfcacc89122.jpg",
+               "name" : "迷迭香美食"
+            },
+            "pubdate" : 1504838309,
+            "stat" : {
+               "coin" : 27,
+               "favorite" : 785,
+               "now_rank" : 0,
+               "aid" : 14266335,
+               "his_rank" : 0,
+               "view" : 11153,
+               "like" : 11,
+               "danmaku" : 14,
+               "share" : 43,
+               "reply" : 39
+            },
+            "copyright" : 1,
+            "fav_at" : 1516214173,
+            "ctime" : 1504838310,
+            "desc" : "被称为蛋糕界爱马仕的Lady M在上海开分店咯，这家美国网红蛋糕店的招牌千层蛋糕曾被纽约杂志《BON APPETIT》评为「美国十大蛋糕」，不在上海的小伙伴们是不是光是听就馋得不行，但事实上就算是在上海的小伙伴为了吃一块Lady M的蛋糕也要费尽千辛万苦，那今天就教大家在家就能做这款千层蛋糕哦更多精彩美食视频与菜谱，搜索关注微信公众号【迷迭香】",
+            "tname" : "美食圈",
+            "dynamic" : "",
+            "title" : "【迷迭香】纽约名媛天价千层蛋糕Lady M，在家就能做！",
+            "rights" : {
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0,
+               "movie" : 0,
+               "no_reprint" : 1,
+               "download" : 0,
+               "elec" : 0
+            },
+            "duration" : 70,
+            "highlight_title" : "【迷迭香】纽约名媛天价千层蛋糕Lady M，在家就能做！"
+         },
+         {
+            "tname" : "美食圈",
+            "desc" : "颜值超高翡翠豆沙饼，吃一口甜到幸福，美到心里！更多精彩美食视频与菜谱，搜索微信公众号【迷迭香】，400道大餐等着你！",
+            "ctime" : 1497433926,
+            "fav_at" : 1516214091,
+            "copyright" : 1,
+            "highlight_title" : "颜值超高翡翠豆沙饼，一块就能吃上瘾！",
+            "duration" : 166,
+            "title" : "颜值超高翡翠豆沙饼，一块就能吃上瘾！",
+            "rights" : {
+               "movie" : 0,
+               "no_reprint" : 0,
+               "download" : 0,
+               "elec" : 0,
+               "hd5" : 0,
+               "pay" : 0,
+               "bp" : 0
+            },
+            "dynamic" : "",
+            "pic" : "http://i1.hdslb.com/bfs/archive/1fbb82ef3562997abffc406f60092858e7f7c774.jpg",
+            "aid" : 10812255,
+            "videos" : 1,
+            "play_num" : "11466",
+            "stat" : {
+               "danmaku" : 67,
+               "like" : 2,
+               "view" : 11466,
+               "share" : 33,
+               "reply" : 49,
+               "coin" : 57,
+               "now_rank" : 0,
+               "favorite" : 1080,
+               "his_rank" : 0,
+               "aid" : 10812255
+            },
+            "pubdate" : 1495691106,
+            "owner" : {
+               "face" : "http://i1.hdslb.com/bfs/face/89594b3f720273257c757be190db5cfcacc89122.jpg",
+               "mid" : 18503938,
+               "name" : "迷迭香美食"
+            },
+            "attribute" : 49152,
+            "tid" : 76,
+            "state" : 0
+         }
+      ],
+      "keyword" : "",
+      "total" : 216,
+      "suggest_keyword" : ""
+   },
+   "code" : 0,
+   "ttl" : 1
+}
+#+end_src
+
+*** DONE construct data structure
+CLOSED: [2018-01-29 Mon 00:21]
+:LOGBOOK:
+- State "DONE"       from              [2018-01-29 Mon 00:21]
+:END:
+
+#+begin_src emacs-lisp
+(setq kk '(((fid . 6076112) (mid . 5311795) (name . 默认收藏夹) (max_count . 100000) (cur_count . 187) (atten_count . 0) (favoured . 0) (state . 0) (ctime . 1438922096) (mtime . 1513872588) (cover ((aid . 17110358) (pic . http://i2.hdslb.com/bfs/archive/e9a9076242c1fafc60f394a63d4edbf09b3f489a.jpg)) ((aid . 16957235) (pic . http://i2.hdslb.com/bfs/archive/3d81d431d29e21da844d6a19b363a66c15cf85b9.jpg)) ((aid . 15616081) (pic . http://i0.hdslb.com/bfs/archive/648c302003d40a4a4a3c6b5337da7e6075873931.jpg)))) ((fid . 98950759) (mid . 5311795) (name . 装修) (max_count . 999) (cur_count . 29) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1516209077) (mtime . 1516213176) (cover ((aid . 16810564) (pic . http://i0.hdslb.com/bfs/archive/13a6581cb3e3eea60d5bcbeb63f23211d8b29674.jpg)) ((aid . 6252268) (pic . http://i2.hdslb.com/bfs/archive/39ccbfe789367d7f50423c494b306d94151be477.jpg)) ((aid . 15319048) (pic . http://i1.hdslb.com/bfs/archive/186fc62c0adaddeaf88464f2255762feec34b416.jpg)))) ((fid . 96641749) (mid . 5311795) (name . 厨房) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1514894217) (mtime . 1515033326) (cover ((aid . 17185784) (pic . http://i1.hdslb.com/bfs/archive/fecc2fdffdd055c84b525e65b4acf268e8bbfdeb.jpg)) ((aid . 11469310) (pic . http://i1.hdslb.com/bfs/archive/78058d49479429f191f92c47cf08fb0cf155d0eb.png)))) ((fid . 95604141) (mid . 5311795) (name . ASMR) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1514373265) (mtime . 1514373356) (cover ((aid . 16902249) (pic . http://i0.hdslb.com/bfs/archive/917122f5344bab47f7fdbdd17a74c4e881b6e96e.png)) ((aid . 10364305) (pic . http://i0.hdslb.com/bfs/archive/7e66e62dd3479b59624caa45f41dd92d2e3fcc92.jpg)))) ((fid . 94816981) (mid . 5311795) (name . 学习) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1513873180) (mtime . 1513873712) (cover ((aid . 17165131) (pic . http://i2.hdslb.com/bfs/archive/1a596c237a302a756b042885192ee4af8570d99b.jpg)) ((aid . 17235714) (pic . http://i1.hdslb.com/bfs/archive/b2e0c3293a914636ced4dc48ead253cb3f266c61.jpg)))) ((fid . 94696493) (mid . 5311795) (name . 武器) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1513787155) (mtime . 1513787156) (cover ((aid . 16939552) (pic . http://i0.hdslb.com/bfs/archive/d7f055e703b3331461ed22a1bf1e0c1d431e1a92.jpg)))) ((fid . 94695775) (mid . 5311795) (name . 机械) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1513786803) (mtime . 1513787156) (cover ((aid . 16939552) (pic . http://i0.hdslb.com/bfs/archive/d7f055e703b3331461ed22a1bf1e0c1d431e1a92.jpg)) ((aid . 17342801) (pic . http://i2.hdslb.com/bfs/archive/8d02c4ce74e5687a670bbd44807c607e0bdb9e77.jpg)))) ((fid . 91710732) (mid . 5311795) (name . 互联网) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1512009517) (mtime . 1512009523) (cover ((aid . 16777246) (pic . http://i2.hdslb.com/bfs/archive/21cf803d6b5b5dec5fe1b8f93b628da405247ba9.jpg)))) ((fid . 91289551) (mid . 5311795) (name . 爱情) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1511698949) (mtime . 1511698955) (cover ((aid . 16566172) (pic . http://i2.hdslb.com/bfs/archive/0cb096b790591f48ee22b03526c742b071de1c7a.jpg)))) ((fid . 91280974) (mid . 5311795) (name . 武术) (max_count . 999) (cur_count . 4) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1511695453) (mtime . 1515335131) (cover ((aid . 17922949) (pic . http://i1.hdslb.com/bfs/archive/3a8b5c3b3b2ffb583f7f4b8e29dde220c3a48721.jpg)) ((aid . 11952077) (pic . http://i0.hdslb.com/bfs/archive/9a6cdd406bc7449f59dfb41828bcb5e8a6beb6ef.jpg)) ((aid . 16045879) (pic . http://i1.hdslb.com/bfs/archive/cfd60bc7575adfd138ffa46fb1645fc968851605.jpg)))) ((fid . 90795112) (mid . 5311795) (name . 野外) (max_count . 999) (cur_count . 8) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1511429769) (mtime . 1516619911) (cover ((aid . 18509510) (pic . http://i2.hdslb.com/bfs/archive/002312303618437cc8ef6c3b59b021f0fb8c3c68.jpg)) ((aid . 18199099) (pic . http://i1.hdslb.com/bfs/archive/d5d0e7651d223848908150c115f185196bab1355.png)) ((aid . 17575583) (pic . http://i1.hdslb.com/bfs/archive/03e53cad878e8f359b8abfb20146c72381114eeb.jpg)))) ((fid . 90467182) (mid . 5311795) (name . 妹子) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1511177456) (mtime . 1511431402) (cover ((aid . 15805929) (pic . http://i2.hdslb.com/bfs/archive/e2c89158db406b5c3f52371f40d959064ce94064.jpg)) ((aid . 15470086) (pic . http://i1.hdslb.com/bfs/archive/89ebe38880ed2a858cfedbbe5509fcba5988c306.jpg)) ((aid . 15713791) (pic . http://i1.hdslb.com/bfs/archive/277151e6ade4ea62566a8c30481de9a8523f07f4.jpg)))) ((fid . 88757295) (mid . 5311795) (name . 美容) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1510144127) (mtime . 1510144129) (cover ((aid . 15499475) (pic . http://i0.hdslb.com/bfs/archive/7c3fef6a14d1046b214c6821c5e3753dec205d7a.jpg)))) ((fid . 88755131) (mid . 5311795) (name . DIY) (max_count . 999) (cur_count . 14) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1510143233) (mtime . 1514651669) (cover ((aid . 16630903) (pic . http://i1.hdslb.com/bfs/archive/43626bf431c412c41a9ae2200722bbeb39caa5c2.jpg)) ((aid . 17677445) (pic . http://i1.hdslb.com/bfs/archive/3830f2ab8fb813b3f87778ce1d2125765442e641.jpg)) ((aid . 15367822) (pic . http://i2.hdslb.com/bfs/archive/bd774853c1c9864b02936b9aaf4681c415de88f8.jpg)))) ((fid . 88377356) (mid . 5311795) (name . 科技) (max_count . 999) (cur_count . 4) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1509883172) (mtime . 1516428760) (cover ((aid . 18160524) (pic . http://i2.hdslb.com/bfs/archive/435b2f3e3b33ced59009b281c1b3979b74d71539.jpg)) ((aid . 17467692) (pic . http://i0.hdslb.com/bfs/archive/8df2de16b13d95eff9ba06a35a83d29ba6bc88e4.jpg)) ((aid . 15880058) (pic . http://i1.hdslb.com/bfs/archive/3c5a8296d09b0ec81bd6bf5f933eec33fd7b99d0.jpg)))) ((fid . 83719107) (mid . 5311795) (name . 动画) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1506482854) (mtime . 1506482857) (cover ((aid . 14480624) (pic . http://i1.hdslb.com/bfs/archive/c533ca1c460559e4c9c8eb49002a3e954654a1fa.jpg)))) ((fid . 83709130) (mid . 5311795) (name . 水果) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1506469908) (mtime . 1506590604) (cover ((aid . 14835233) (pic . http://i2.hdslb.com/bfs/archive/f21c1ef4ae5b372ada394934e05fb100d35986db.jpg)) ((aid . 14696947) (pic . http://i1.hdslb.com/bfs/archive/01f581478a0137fd4e546896711be0967ec0c855.jpg)))) ((fid . 83709094) (mid . 5311795) (name . 美食) (max_count . 999) (cur_count . 212) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1506469848) (mtime . 1517064003) (cover ((aid . 18660908) (pic . http://i2.hdslb.com/bfs/archive/d0d7d0cafacc85562840d25bb46b7edced566853.jpg)) ((aid . 18430748) (pic . http://i1.hdslb.com/bfs/archive/9b0d95a77329d829d43c26bc416c68191dacbfdb.png)) ((aid . 18268287) (pic . http://i1.hdslb.com/bfs/archive/b31887d70d2328706e5fb4cdc1b81aa22977011e.jpg)))) ((fid . 81465941) (mid . 5311795) (name . 农业) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504939675) (mtime . 1513786445) (cover ((aid . 11727813) (pic . http://i1.hdslb.com/bfs/archive/59b702e915e20b90da375c3edc8558d8f5b01cd5.jpg)) ((aid . 17203580) (pic . http://i0.hdslb.com/bfs/archive/1999b331143867bf5ca7d2e72d13d2c0f7f02ff7.jpg)) ((aid . 15244658) (pic . http://i2.hdslb.com/bfs/archive/ecdb727fe24942fa6aa94ed2d6dea22c5b31d2e0.jpg)))) ((fid . 81112064) (mid . 5311795) (name . App) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504633715) (mtime . 1504633717) (cover ((aid . 14195790) (pic . http://i1.hdslb.com/bfs/archive/c00b8a61e5c7333db9149426cb5274b5eb344fc6.jpg)))) ((fid . 80554490) (mid . 5311795) (name . 医疗) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504246271) (mtime . 1510150199) (cover ((aid . 9664260) (pic . http://i0.hdslb.com/bfs/archive/ffa666b107e0bb872b3e04e83175b53dfa272d3d.jpg)) ((aid . 11911989) (pic . http://i1.hdslb.com/bfs/archive/b1311822c47a7b027b7444a4264d6591252e95c2.png)) ((aid . 14768566) (pic . http://i0.hdslb.com/bfs/archive/b92f3ed45663971b3fa3cc429e6fb14078de4484.jpg)))) ((fid . 80408115) (mid . 5311795) (name . 梦想) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504140355) (mtime . 1504140357) (cover ((aid . 13128484) (pic . http://i0.hdslb.com/bfs/archive/448fbd90c4415563831ccb4b5ac1b8503d00e63b.jpg)))) ((fid . 80407353) (mid . 5311795) (name . 九州) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1504139532) (mtime . 1504139533) (cover ((aid . 13969864) (pic . http://i1.hdslb.com/bfs/archive/395479fd50b0827ed6bf6ebd8cfced99adac18ec.jpg)))) ((fid . 79349712) (mid . 5311795) (name . 武侠) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1503572359) (mtime . 1503572361) (cover ((aid . 13482815) (pic . http://i0.hdslb.com/bfs/archive/95f0d4bc9ab19e2a75e143edb85e51dda839cc20.jpg)))) ((fid . 79174776) (mid . 5311795) (name . 电影) (max_count . 999) (cur_count . 9) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1503481724) (mtime . 1517029292) (cover ((aid . 18679577) (pic . http://i0.hdslb.com/bfs/archive/235111ac43ceb48fe870c226e23fc315b3dbd2f9.jpg)) ((aid . 17922203) (pic . http://i2.hdslb.com/bfs/archive/44c315fd4eadf7391ff3adf2719981e69e330218.jpg)) ((aid . 18010736) (pic . http://i1.hdslb.com/bfs/archive/a8ddcfd33874bc3330cce625318391f649952ca9.jpg)))) ((fid . 79166925) (mid . 5311795) (name . 古风乐曲) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1503478809) (mtime . 1503478812) (cover ((aid . 13506043) (pic . http://i2.hdslb.com/bfs/archive/d7602a40ae530381f516235b270e6a7f59e5d3ee.jpg)))) ((fid . 78179778) (mid . 5311795) (name . 古风美女) (max_count . 999) (cur_count . 5) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1502966655) (mtime . 1509146860) (cover ((aid . 13499850) (pic . http://i1.hdslb.com/bfs/archive/03567a9563546b2e92c74d3c08d355c4f7ec411b.jpg)) ((aid . 15609471) (pic . http://i0.hdslb.com/bfs/archive/9de4d2a8759161d7a0259ee4f1c1bb2b469573e5.jpg)) ((aid . 13707474) (pic . http://i0.hdslb.com/bfs/archive/8f2b97ae94d5ecbbb8002adfdd96aa9ed65ea736.jpg)))) ((fid . 78098427) (mid . 5311795) (name . 舞蹈) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1502930302) (mtime . 1502930303) (cover ((aid . 13365089) (pic . http://i0.hdslb.com/bfs/archive/4624ffe9561fbea8127423291330e0957c86bd2b.jpg)))) ((fid . 75781637) (mid . 5311795) (name . 国家政府政策) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1501919722) (mtime . 1501919725) (cover ((aid . 12952728) (pic . http://i2.hdslb.com/bfs/archive/4b94a9f9e8c98d28c677a0de658c3f6c218357e0.png)))) ((fid . 66683570) (mid . 5311795) (name . 歌曲) (max_count . 999) (cur_count . 4) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1497154964) (mtime . 1516262965) (cover ((aid . 18229410) (pic . http://i0.hdslb.com/bfs/archive/0a23b4c9a9ea9b070b2147fba58b7ea5401b5124.png)) ((aid . 17387818) (pic . http://i1.hdslb.com/bfs/archive/b0a3b7e871977d521a003f5d0ca280dccf99d30b.png)) ((aid . 14057485) (pic . http://i0.hdslb.com/bfs/archive/c8f087077363ee87acd1d2960c5da9f5153ad0a4.jpg)))) ((fid . 66683073) (mid . 5311795) (name . H) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1497154778) (mtime . 1497154784) (cover ((aid . 9513427) (pic . http://i0.hdslb.com/bfs/archive/bbbfa4924893edadebd2dd2974231d367cfb021c.jpg)))) ((fid . 65828706) (mid . 5311795) (name . 混剪) (max_count . 999) (cur_count . 3) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496410936) (mtime . 1503481432) (cover ((aid . 2712572) (pic . http://i0.hdslb.com/bfs/archive/502f31282a85a3dea576e4fe232cd1f9e7a9fb92.jpg)) ((aid . 13430278) (pic . http://i0.hdslb.com/bfs/archive/afa1073371f10cf04a2095e7ed8585e03158179c.jpg)) ((aid . 10989901) (pic . http://i1.hdslb.com/bfs/archive/dfb0590c789d83b33ea2053e74e8dd3e7388e4a0.jpg)))) ((fid . 65828168) (mid . 5311795) (name . 萝莉正太) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496410723) (mtime . 1496410726) (cover ((aid . 10990092) (pic . http://i2.hdslb.com/bfs/archive/3e5423f2cf26ad5af9af83bbde20df1b62986de1.jpg)))) ((fid . 65827601) (mid . 5311795) (name . 科技发明) (max_count . 999) (cur_count . 13) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496410489) (mtime . 1503480786) (cover ((aid . 11369694) (pic . http://i0.hdslb.com/bfs/archive/3fb29f15cebb3e5e8aa61598c39cb2ffd498cba6.jpg)) ((aid . 11975608) (pic . http://i0.hdslb.com/bfs/archive/a9f3f98600d87d02101b694bc57e9f4c527eaa3d.jpg)) ((aid . 12102847) (pic . http://i2.hdslb.com/bfs/archive/36c0ddac3c14f00c0aaac1fb7503e5c1bfb8b76d.jpg)))) ((fid . 65825201) (mid . 5311795) (name . 跑酷) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496409508) (mtime . 1496410077) (cover ((aid . 10264772) (pic . http://i1.hdslb.com/bfs/archive/913b12c4f0eca947b1693a4d82e447b1ec58ea35.jpg)) ((aid . 10433382) (pic . http://i2.hdslb.com/bfs/archive/304ffdb119660a2dfdc713743481a1408a28af62.jpg)))) ((fid . 65797478) (mid . 5311795) (name . 可爱猫咪) (max_count . 999) (cur_count . 2) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496395367) (mtime . 1514275492) (cover ((aid . 17467692) (pic . http://i0.hdslb.com/bfs/archive/8df2de16b13d95eff9ba06a35a83d29ba6bc88e4.jpg)) ((aid . 10854390) (pic . http://i0.hdslb.com/bfs/archive/74dd5b9e06884eed8c161e57ffe1622148fb073d.jpg)))) ((fid . 65797005) (mid . 5311795) (name . recipes) (max_count . 999) (cur_count . 1) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1496395058) (mtime . 1496395061) (cover ((aid . 10979738) (pic . http://i2.hdslb.com/bfs/archive/eff8813ac1c31b6eb3049075325f8a3f337b9ded.jpg)))) ((fid . 55908718) (mid . 5311795) (name . 美女) (max_count . 999) (cur_count . 14) (atten_count . 0) (favoured . 0) (state . 2) (ctime . 1489364488) (mtime . 1516210453) (cover ((aid . 8759193) (pic . http://i1.hdslb.com/bfs/archive/2b41243a13c1caaf18bc68c60fee09de22a95bc9.jpg)) ((aid . 17978800) (pic . http://i2.hdslb.com/bfs/archive/fab5bd1e3aabdb057b6bb5491104f167d5351a6b.jpg)) ((aid . 16262137) (pic . http://i2.hdslb.com/bfs/archive/f43a6ec9b92b17b945341e5b63145ef8d5e8637d.png))))))
+
+(setq emms-bilibili-bm-list nil)
+
+(mapcar
+ (lambda (bookmark)
+   (let ((fid (alist-get 'fid bookmark))
+         (name (alist-get 'name bookmark))
+         (count (alist-get 'cur_count bookmark))
+         bm-alist)
+     (push `(name . ,name) bm-alist)
+     (push `(fid . ,fid) bm-alist)
+     (push `(count . ,count) bm-alist)
+     (push `(bm-data . ,bookmark) bm-alist)
+     (push bm-alist emms-bilibili-bm-list)
+     ))
+ kk)
+
+(alist-get 'fid (car kk))
+#+end_src
+
+#+RESULTS[<2018-02-22 17:34:03> 7706dbf5d95c473d9dc79e4c097951d1830a3c19]:
+: 6076112
+
+*** DONE query FID through NAME [2/2]
+CLOSED: [2018-02-23 Fri 22:37]
+:LOGBOOK:
+- State "DONE"       from "TODO"       [2018-02-23 Fri 22:37]
+- State "TODO"       from              [2018-02-23 Fri 10:40]
+:END:
+
+- [X] https://emacs.stackexchange.com/questions/39016/how-to-interactively-select-alist-cons-pairs-cdr-instead-of-whole-cons
+- [X] record to Org
+
+** TODO sorting the favlist by count
+:LOGBOOK:
+- State "TODO"       from              [2018-02-23 Fri 22:58]
+:END:
+
+
+* Troubleshooting
+
+#+begin_src emacs-lisp
+;; get pagecount
+(alist-get 'pagecount (alist-get 'data bilibili-json)) ; FIXME: unknown bilibili-json
+
+;; get first video title
+(alist-get 'title (nth 0 emms-bilibili-alist))
+
+;; get video ID
+(alist-get 'aid (nth 0 emms-bilibili-alist))
+
+;; get video URL
+(emms-bilibili-generate-video-url (alist-get 'aid (nth 0 emms-bilibili-alist)))
+
+;; get video state
+(alist-get 'state (nth 10 emms-bilibili-alist))
+#+end_src
+
