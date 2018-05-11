@@ -77,9 +77,11 @@
 
 (defun emms-bilibili-get-mid ()
   "Prompt user for mid."
-  (unless (not (null emms-bilibili-mid))
-    (browse-url "https://space.bilibili.com/")
-    (setq emms-bilibili-mid (read-from-minibuffer "Input your Bilibili user mid number: "))))
+  (if (null emms-bilibili-mid)
+      (progn
+        (browse-url "https://space.bilibili.com/")
+        (setq emms-bilibili-mid (read-from-minibuffer "Input your Bilibili user mid number: ")))
+    (message "You Bilibili user mid number is `%s.'" emms-bilibili-mid)))
 
 (defun emms-bilibili-url-clean-response-buffer ()
   "Delete header from response buffer."
