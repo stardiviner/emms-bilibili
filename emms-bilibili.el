@@ -146,7 +146,7 @@
           (lambda () (message "EMMS Bilibili fetch playlist done.")))
 
 ;;; Support marked tracks actions.
-;;;###autoload (autoload 'magithub-dispatch-popup "magithub" nil t)
+;;;###autoload (autoload 'emms-bilibili-download-dispatch-popup "emms-bilibili" nil t)
 (magit-define-popup emms-bilibili-download-dispatch-popup
   "Popup console for dispatching EMMS Bilibili download options."
   'emms-bilibili-downloaders
